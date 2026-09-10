@@ -1,0 +1,17 @@
+{
+	"luci-app-danbox": {
+		"description": "Grant access to LuCI app danbox",
+		"read": {
+			"uci": [ "danbox" ],
+			"file": {
+				"/etc/init.d/danbox": [ "exec" ]
+			}
+		},
+		"write": {
+			"uci": [ "danbox" ],
+			"file": {
+				"/etc/init.d/danbox": [ "exec" ]
+			}
+		}
+	}
+}

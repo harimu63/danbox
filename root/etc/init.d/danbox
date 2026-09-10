@@ -1,0 +1,128 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2026 Higen (harimu63)
+# start/stop logic diadaptasi dari start-singbox.sh / stop-singbox.sh milik user
+
+START=99
+STOP=10
+USE_PROCD=1
+
+CONF="danbox"
+NFT_FILE="/etc/danbox-tproxy.nft"
+NFT_TABLE="danbox_tproxy"
+
+setup_network() {
+	local tproxy_port fwmark self_mark rtable
+
+	config_get tproxy_port config tproxy_port 9898
+	config_get fwmark      config fwmark      0x1
+	config_get self_mark   config self_mark   0xff
+	config_get rtable      config rtable      100
+
+	# bersihkan sisa rule lama dulu (jaga-jaga, sama seperti stop-singbox.sh)
+	nft delete table inet "$NFT_TABLE" 2>/dev/null
+	ip rule del fwmark "$fwmark" lookup "$rtable" 2>/dev/null
+	ip route flush table "$rtable" 2>/dev/null
+
+	cat > "$NFT_FILE" << EOF
+table inet $NFT_TABLE {
+	chain prerouting {
+		type filter hook prerouting priority mangle; policy accept;
+		ip daddr { 127.0.0.0/8, 192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12 } accept
+		meta l4proto tcp meta mark set $fwmark tproxy ip to :$tproxy_port accept
+		meta l4proto udp meta mark set $fwmark tproxy ip to :$tproxy_port accept
+	}
+
+	chain output {
+		type route hook output priority mangle; policy accept;
+		ip daddr { 127.0.0.0/8, 192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12 } accept
+		meta mark $self_mark accept
+		meta l4proto tcp meta mark set $fwmark
+		meta l4proto udp meta mark set $fwmark
+	}
+}
+EOF
+
+	nft -f "$NFT_FILE" || {
+		logger -t danbox "gagal load nftables rule dari $NFT_FILE"
+		return 1
+	}
+
+	ip rule add fwmark "$fwmark" lookup "$rtable"
+	ip route add local 0.0.0.0/0 dev lo table "$rtable"
+
+	logger -t danbox "nftables tproxy + ip rule/route terpasang (port=$tproxy_port fwmark=$fwmark table=$rtable)"
+}
+
+teardown_network() {
+	local fwmark rtable
+	config_get fwmark config fwmark 0x1
+	config_get rtable config rtable 100
+
+	nft delete table inet "$NFT_TABLE" 2>/dev/null && logger -t danbox "table $NFT_TABLE dihapus"
+	ip rule del fwmark "$fwmark" lookup "$rtable" 2>/dev/null && logger -t danbox "ip rule dihapus"
+	ip route flush table "$rtable" 2>/dev/null
+}
+
+start_service() {
+	local enabled bin_path config_dir config_file start_delay test_config
+
+	config_load "$CONF"
+	config_get enabled     config enabled     0
+	config_get bin_path    config bin_path    /usr/bin/sing-box
+	config_get config_dir  config config_dir  /etc/sing-box
+	config_get config_file config config_file config.json
+	config_get start_delay config start_delay 0
+	config_get test_config config test_config 1
+
+	[ "$enabled" = "1" ] || {
+		logger -t danbox "service disabled, tidak start"
+		return 1
+	}
+
+	[ -x "$bin_path" ] || {
+		logger -t danbox "binary tidak ditemukan/tidak executable: $bin_path"
+		return 1
+	}
+
+	local cfg_path="${config_dir}/${config_file}"
+	[ -f "$cfg_path" ] || {
+		logger -t danbox "config tidak ditemukan: $cfg_path"
+		return 1
+	}
+
+	[ "$start_delay" -gt 0 ] 2>/dev/null && sleep "$start_delay"
+
+	if [ "$test_config" = "1" ]; then
+		"$bin_path" check -c "$cfg_path" -D "$config_dir" >/tmp/danbox_check.log 2>&1 || {
+			logger -t danbox "config test gagal, batal start (lihat /tmp/danbox_check.log)"
+			return 1
+		}
+	fi
+
+	setup_network || {
+		logger -t danbox "setup nftables/ip rule gagal, batal start sing-box"
+		return 1
+	}
+
+	logger -t danbox "starting sing-box: $bin_path run -c $cfg_path -D $config_dir"
+
+	procd_open_instance danbox
+	procd_set_param command "$bin_path" run -c "$cfg_path" -D "$config_dir"
+	procd_set_param respawn 3600 5 5
+	procd_set_param stdout 1
+	procd_set_param stderr 1
+	procd_set_param term_timeout 10
+	procd_set_param file "$cfg_path"
+	procd_set_param limits nofile="65535 65535"
+	procd_close_instance
+}
+
+stop_service() {
+	config_load "$CONF"
+	logger -t danbox "stopping sing-box, membersihkan nftables/ip rule/route"
+	teardown_network
+}
+
+service_triggers() {
+	procd_add_reload_trigger "$CONF"
+}

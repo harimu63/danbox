@@ -1,0 +1,142 @@
+<%+header%>
+
+<h2 name="content">DanBox</h2>
+<div class="cbi-map-descr">Transparent Proxy Runner for sing-box (SagerNet) on OpenWrt.</div>
+
+<div class="cbi-section">
+	<h3>Status</h3>
+	<table class="table">
+		<tr class="tr table-titles">
+			<th class="th">Core Version</th>
+			<th class="th">Core Status</th>
+			<th class="th" style="width:420px">Actions</th>
+		</tr>
+		<tr class="tr">
+			<td class="td" id="db_version">-</td>
+			<td class="td" id="db_status">-</td>
+			<td class="td">
+				<button class="cbi-button cbi-button-apply" onclick="dbCtl('start')">START</button>
+				<button class="cbi-button cbi-button-remove" onclick="dbCtl('stop')">STOP</button>
+				<button class="cbi-button cbi-button-reset" onclick="dbCtl('restart')">RESTART</button>
+				<button class="cbi-button" onclick="dbCtl('reload')">RELOAD</button>
+			</td>
+		</tr>
+	</table>
+</div>
+
+<div class="cbi-section">
+	<h3>App Config</h3>
+	<table class="table" style="max-width:700px">
+		<tr class="tr">
+			<td class="td left" style="width:180px"><label>Enable</label></td>
+			<td class="td left"><input type="checkbox" id="db_enabled"></td>
+		</tr>
+		<tr class="tr">
+			<td class="td left"><label>Binary Path</label></td>
+			<td class="td left"><input type="text" id="db_bin_path" class="cbi-input-text" style="width:100%"></td>
+		</tr>
+		<tr class="tr">
+			<td class="td left"><label>Config Directory</label></td>
+			<td class="td left"><input type="text" id="db_config_dir" class="cbi-input-text" style="width:100%"></td>
+		</tr>
+		<tr class="tr">
+			<td class="td left"><label>Config File</label></td>
+			<td class="td left"><input type="text" id="db_config_file" class="cbi-input-text" style="width:100%"></td>
+		</tr>
+		<tr class="tr">
+			<td class="td left"><label>Start Delay (s)</label></td>
+			<td class="td left"><input type="number" id="db_start_delay" class="cbi-input-text" style="width:100px"></td>
+		</tr>
+		<tr class="tr">
+			<td class="td left"><label>Test Config Before Start</label></td>
+			<td class="td left"><input type="checkbox" id="db_test_config"></td>
+		</tr>
+		<tr class="tr">
+			<td class="td left" colspan="2"><h4 style="margin-bottom:4px">Transparent Proxy (nftables tproxy)</h4></td>
+		</tr>
+		<tr class="tr">
+			<td class="td left"><label>TPROXY Port</label></td>
+			<td class="td left"><input type="text" id="db_tproxy_port" class="cbi-input-text" style="width:150px"></td>
+		</tr>
+		<tr class="tr">
+			<td class="td left"><label>fwmark</label></td>
+			<td class="td left"><input type="text" id="db_fwmark" class="cbi-input-text" style="width:150px"></td>
+		</tr>
+		<tr class="tr">
+			<td class="td left"><label>self_mark (default_mark di config sing-box)</label></td>
+			<td class="td left"><input type="text" id="db_self_mark" class="cbi-input-text" style="width:150px"></td>
+		</tr>
+		<tr class="tr">
+			<td class="td left"><label>Routing Table</label></td>
+			<td class="td left"><input type="text" id="db_rtable" class="cbi-input-text" style="width:150px"></td>
+		</tr>
+	</table>
+	<div class="cbi-page-actions">
+		<button class="cbi-button cbi-button-save" onclick="dbSaveConfig()">Save &amp; Apply</button>
+	</div>
+</div>
+
+<script type="text/javascript">
+	var dbUrl = {
+		status:  '<%=luci.dispatcher.build_url("admin/services/danbox/status_json")%>',
+		ctl:     '<%=luci.dispatcher.build_url("admin/services/danbox/ctl")%>',
+		cfgGet:  '<%=luci.dispatcher.build_url("admin/services/danbox/config_get")%>',
+		cfgSave: '<%=luci.dispatcher.build_url("admin/services/danbox/config_save")%>'
+	};
+
+	function dbRefreshStatus() {
+		fetch(dbUrl.status).then(r => r.json()).then(function(d) {
+			document.getElementById('db_version').textContent = d.version || 'unknown';
+			var el = document.getElementById('db_status');
+			el.textContent = d.running ? 'Running' : 'Not Running';
+			el.style.color = d.running ? '#2d862d' : '#c0392b';
+			el.style.fontWeight = 'bold';
+		});
+	}
+
+	function dbCtl(action) {
+		var body = new FormData();
+		body.append('action', action);
+		fetch(dbUrl.ctl, { method: 'POST', body: body }).then(r => r.json()).then(function() {
+			setTimeout(dbRefreshStatus, 800);
+		});
+	}
+
+	function dbLoadConfig() {
+		fetch(dbUrl.cfgGet).then(r => r.json()).then(function(d) {
+			document.getElementById('db_enabled').checked = (d.enabled === '1');
+			document.getElementById('db_bin_path').value = d.bin_path;
+			document.getElementById('db_config_dir').value = d.config_dir;
+			document.getElementById('db_config_file').value = d.config_file;
+			document.getElementById('db_start_delay').value = d.start_delay;
+			document.getElementById('db_test_config').checked = (d.test_config === '1');
+			document.getElementById('db_tproxy_port').value = d.tproxy_port;
+			document.getElementById('db_fwmark').value = d.fwmark;
+			document.getElementById('db_self_mark').value = d.self_mark;
+			document.getElementById('db_rtable').value = d.rtable;
+		});
+	}
+
+	function dbSaveConfig() {
+		var body = new FormData();
+		body.append('enabled', document.getElementById('db_enabled').checked ? '1' : '0');
+		body.append('bin_path', document.getElementById('db_bin_path').value);
+		body.append('config_dir', document.getElementById('db_config_dir').value);
+		body.append('config_file', document.getElementById('db_config_file').value);
+		body.append('start_delay', document.getElementById('db_start_delay').value);
+		body.append('test_config', document.getElementById('db_test_config').checked ? '1' : '0');
+		body.append('tproxy_port', document.getElementById('db_tproxy_port').value);
+		body.append('fwmark', document.getElementById('db_fwmark').value);
+		body.append('self_mark', document.getElementById('db_self_mark').value);
+		body.append('rtable', document.getElementById('db_rtable').value);
+		fetch(dbUrl.cfgSave, { method: 'POST', body: body }).then(r => r.json()).then(function(d) {
+			if (d.ok) alert('Saved. Restart the service to apply.');
+		});
+	}
+
+	dbRefreshStatus();
+	dbLoadConfig();
+	setInterval(dbRefreshStatus, 3000);
+</script>
+
+<%+footer%>

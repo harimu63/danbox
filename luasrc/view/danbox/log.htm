@@ -1,0 +1,30 @@
+<%+header%>
+
+<h2 name="content">DanBox - Log</h2>
+<div class="cbi-map-descr">Live tail of sing-box service log (via syslog).</div>
+
+<div class="cbi-page-actions" style="margin-bottom:8px">
+	<button class="cbi-button" onclick="dbLoadLog()">Refresh Now</button>
+	<label style="margin-left:12px"><input type="checkbox" id="db_autoscroll" checked> Auto-scroll</label>
+</div>
+
+<textarea id="db_log" readonly style="width:100%; height:560px; font-family:monospace; font-size:12px; background:#111; color:#0f0"></textarea>
+
+<script type="text/javascript">
+	var dbLogUrl = '<%=luci.dispatcher.build_url("admin/services/danbox/log_data")%>';
+
+	function dbLoadLog() {
+		fetch(dbLogUrl).then(r => r.json()).then(function(d) {
+			var box = document.getElementById('db_log');
+			box.value = d.log || '';
+			if (document.getElementById('db_autoscroll').checked) {
+				box.scrollTop = box.scrollHeight;
+			}
+		});
+	}
+
+	dbLoadLog();
+	setInterval(dbLoadLog, 3000);
+</script>
+
+<%+footer%>
