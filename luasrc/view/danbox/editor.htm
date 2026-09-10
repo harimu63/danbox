@@ -1,21 +1,36 @@
 <%+header%>
 
 <h2 name="content">DanBox - Editor</h2>
-<div class="cbi-map-descr">Browse and edit files directly inside the sing-box config directory.</div>
+<div class="cbi-map-descr">File manager untuk folder config sing-box (dibatasi hanya di dalam folder ini).</div>
 
-<div style="display:flex; gap:16px; align-items:flex-start">
-	<div class="cbi-section" style="width:260px">
-		<h3>Files</h3>
-		<ul id="db_filelist" style="list-style:none; margin:0; padding:0"></ul>
+<div class="cbi-section">
+	<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px">
+		<div id="db_breadcrumb" style="font-family:monospace"></div>
+		<div>
+			<input type="text" id="db_newfile_name" placeholder="nama-file-baru.json" class="cbi-input-text" style="width:220px">
+			<button class="cbi-button cbi-button-add" onclick="dbNewFile()">+ File Baru</button>
+		</div>
 	</div>
 
-	<div class="cbi-section" style="flex:1">
-		<h3 id="db_editor_title">Select a file</h3>
-		<textarea id="db_editor" style="width:100%; height:480px; font-family:monospace; font-size:13px"></textarea>
-		<div class="cbi-page-actions">
-			<button class="cbi-button cbi-button-save" onclick="dbSaveFile()">Save</button>
-			<button class="cbi-button" onclick="dbReloadFile()">Reload</button>
-		</div>
+	<table class="table cbi-section-table">
+		<tr class="tr table-titles">
+			<th class="th">Name</th>
+			<th class="th">Size</th>
+			<th class="th">Modified</th>
+			<th class="th">Perms</th>
+			<th class="th" style="width:230px">Actions</th>
+		</tr>
+		<tbody id="db_file_rows"></tbody>
+	</table>
+</div>
+
+<div class="cbi-section" id="db_editor_section" style="display:none">
+	<h3 id="db_editor_title">-</h3>
+	<textarea id="db_editor" style="width:100%; height:440px; font-family:monospace; font-size:13px"></textarea>
+	<div class="cbi-page-actions">
+		<button class="cbi-button cbi-button-save" onclick="dbSaveFile()">Save</button>
+		<button class="cbi-button" onclick="dbReloadFile()">Reload</button>
+		<button class="cbi-button cbi-button-remove" onclick="dbCloseEditor()">Close</button>
 	</div>
 </div>
 
@@ -23,32 +38,81 @@
 	var dbUrl = {
 		list: '<%=luci.dispatcher.build_url("admin/services/danbox/file_list")%>',
 		get:  '<%=luci.dispatcher.build_url("admin/services/danbox/file_get")%>',
-		save: '<%=luci.dispatcher.build_url("admin/services/danbox/file_save")%>'
+		save: '<%=luci.dispatcher.build_url("admin/services/danbox/file_save")%>',
+		del:  '<%=luci.dispatcher.build_url("admin/services/danbox/file_delete")%>',
+		dl:   '<%=luci.dispatcher.build_url("admin/services/danbox/file_download")%>'
 	};
+	var dbCurrentPath = '';
 	var dbCurrentFile = null;
 
+	function dbFmtSize(n) {
+		if (n < 1024) return n + ' B';
+		if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+		return (n / 1024 / 1024).toFixed(2) + ' MB';
+	}
+	function dbFmtTime(ts) {
+		if (!ts) return '-';
+		return new Date(ts * 1000).toLocaleString();
+	}
+	function dbEscapeHtml(s) {
+		return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+	}
+
+	function dbBreadcrumb() {
+		var parts = dbCurrentPath.split('/').filter(Boolean);
+		var html = '<a href="#" onclick="dbGoto(\'\');return false;">config-dir</a>';
+		var acc = '';
+		parts.forEach(function(p) {
+			acc += (acc ? '/' : '') + p;
+			html += ' / <a href="#" onclick="dbGoto(\'' + acc + '\');return false;">' + dbEscapeHtml(p) + '</a>';
+		});
+		document.getElementById('db_breadcrumb').innerHTML = html;
+	}
+
+	function dbGoto(path) {
+		dbCurrentPath = path;
+		dbLoadList();
+	}
+
 	function dbLoadList() {
-		fetch(dbUrl.list).then(r => r.json()).then(function(d) {
-			var ul = document.getElementById('db_filelist');
-			ul.innerHTML = '';
+		dbBreadcrumb();
+		fetch(dbUrl.list + '?path=' + encodeURIComponent(dbCurrentPath)).then(r => r.json()).then(function(d) {
+			var rows = document.getElementById('db_file_rows');
+			rows.innerHTML = '';
+			if (!d.ok) {
+				rows.innerHTML = '<tr class="tr"><td class="td" colspan="5">' + dbEscapeHtml(d.msg || 'error') + '</td></tr>';
+				return;
+			}
 			(d.files || []).forEach(function(f) {
-				var li = document.createElement('li');
-				li.textContent = f.name + (f.is_dir ? '/' : '');
-				li.style.cursor = f.is_dir ? 'default' : 'pointer';
-				li.style.padding = '4px 0';
-				li.style.color = f.is_dir ? '#888' : '#2266cc';
-				if (!f.is_dir) {
-					li.onclick = function() { dbOpenFile(f.name); };
-				}
-				ul.appendChild(li);
+				var rel = (dbCurrentPath ? dbCurrentPath + '/' : '') + f.name;
+				var tr = document.createElement('tr');
+				tr.className = 'tr';
+
+				var nameCell = f.is_dir
+					? '<a href="#" onclick="dbGoto(\'' + rel.replace(/'/g, "\\'") + '\');return false;">&#128193; ' + dbEscapeHtml(f.name) + '</a>'
+					: '&#128196; ' + dbEscapeHtml(f.name);
+
+				var actions = f.is_dir ? '' :
+					'<button class="cbi-button cbi-button-edit" onclick="dbOpenFile(\'' + rel.replace(/'/g, "\\'") + '\')">Edit</button> ' +
+					'<a class="cbi-button" href="' + dbUrl.dl + '?name=' + encodeURIComponent(rel) + '">Download</a> ' +
+					'<button class="cbi-button cbi-button-remove" onclick="dbDeleteFile(\'' + rel.replace(/'/g, "\\'") + '\')">Delete</button>';
+
+				tr.innerHTML =
+					'<td class="td">' + nameCell + '</td>' +
+					'<td class="td">' + (f.is_dir ? '-' : dbFmtSize(f.size)) + '</td>' +
+					'<td class="td">' + dbFmtTime(f.mtime) + '</td>' +
+					'<td class="td">' + dbEscapeHtml(f.perm) + '</td>' +
+					'<td class="td">' + actions + '</td>';
+				rows.appendChild(tr);
 			});
 		});
 	}
 
-	function dbOpenFile(name) {
-		dbCurrentFile = name;
-		document.getElementById('db_editor_title').textContent = name;
-		fetch(dbUrl.get + '?name=' + encodeURIComponent(name)).then(r => r.json()).then(function(d) {
+	function dbOpenFile(rel) {
+		dbCurrentFile = rel;
+		document.getElementById('db_editor_section').style.display = '';
+		document.getElementById('db_editor_title').textContent = rel;
+		fetch(dbUrl.get + '?name=' + encodeURIComponent(rel)).then(r => r.json()).then(function(d) {
 			document.getElementById('db_editor').value = d.ok ? d.content : ('// error: ' + d.msg);
 		});
 	}
@@ -57,13 +121,48 @@
 		if (dbCurrentFile) dbOpenFile(dbCurrentFile);
 	}
 
+	function dbCloseEditor() {
+		dbCurrentFile = null;
+		document.getElementById('db_editor_section').style.display = 'none';
+	}
+
 	function dbSaveFile() {
-		if (!dbCurrentFile) { alert('No file selected'); return; }
+		if (!dbCurrentFile) return;
 		var body = new FormData();
 		body.append('name', dbCurrentFile);
 		body.append('content', document.getElementById('db_editor').value);
 		fetch(dbUrl.save, { method: 'POST', body: body }).then(r => r.json()).then(function(d) {
 			alert(d.ok ? 'Saved.' : 'Save failed.');
+			dbLoadList();
+		});
+	}
+
+	function dbDeleteFile(rel) {
+		if (!confirm('Hapus ' + rel + '?')) return;
+		var body = new FormData();
+		body.append('name', rel);
+		fetch(dbUrl.del, { method: 'POST', body: body }).then(r => r.json()).then(function(d) {
+			if (!d.ok) alert('Gagal menghapus.');
+			if (dbCurrentFile === rel) dbCloseEditor();
+			dbLoadList();
+		});
+	}
+
+	function dbNewFile() {
+		var name = document.getElementById('db_newfile_name').value.trim();
+		if (!name) { alert('Nama file kosong'); return; }
+		var rel = (dbCurrentPath ? dbCurrentPath + '/' : '') + name;
+		var body = new FormData();
+		body.append('name', rel);
+		body.append('content', '');
+		fetch(dbUrl.save, { method: 'POST', body: body }).then(r => r.json()).then(function(d) {
+			if (d.ok) {
+				document.getElementById('db_newfile_name').value = '';
+				dbLoadList();
+				dbOpenFile(rel);
+			} else {
+				alert('Gagal membuat file.');
+			}
 		});
 	}
 
