@@ -79,15 +79,16 @@ start_service() {
 	config_get start_delay config start_delay 0
 	config_get test_config config test_config 1
 
-	# log baru tiap kali Start ditekan -> log lama otomatis hilang
+	if [ "$enabled" != "1" ]; then
+		logger -t danbox "Service dalam kondisi disabled, start dibatalkan."
+		return 1
+	fi
+
+	# log baru cuma dibuat kalau memang benar-benar mau start
+	# (bukan saat disabled, dan bukan saat stop)
 	: > "$LOG_FILE"
 
 	log_step "=== [1/6] Memvalidasi konfigurasi ==="
-
-	if [ "$enabled" != "1" ]; then
-		log_step "Service dalam kondisi disabled, start dibatalkan."
-		return 1
-	fi
 
 	if [ ! -x "$bin_path" ]; then
 		log_step "GAGAL: binary tidak ditemukan atau tidak executable ($bin_path)"
@@ -133,9 +134,21 @@ start_service() {
 	procd_set_param limits nofile="65535 65535"
 	procd_close_instance
 
-	sleep 2
 	log_step "=== [6/6] Memeriksa status sing-box ==="
-	if pgrep -f "$bin_path run" >/dev/null 2>&1; then
+
+	# retry beberapa kali -> procd butuh sedikit waktu utk benar2 spawn proses,
+	# jangan cuma cek sekali atau bisa false negative padahal core-nya jalan
+	local i=0 up=0
+	while [ "$i" -lt 6 ]; do
+		sleep 1
+		if pgrep -f "$bin_path run" >/dev/null 2>&1; then
+			up=1
+			break
+		fi
+		i=$((i + 1))
+	done
+
+	if [ "$up" = "1" ]; then
 		log_step "sing-box BERHASIL berjalan, tidak ada error. PID $(pgrep -f "$bin_path run" | head -n1)"
 		log_step "Buka Dashboard lewat tombol OPEN DASHBOARD di App Config."
 	else
