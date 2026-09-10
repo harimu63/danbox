@@ -1,30 +1,66 @@
 <%+header%>
 
 <h2 name="content">DanBox - Log</h2>
-<div class="cbi-map-descr">Live tail of sing-box service log (via syslog).</div>
+<div class="cbi-map-descr">Log service sing-box. Otomatis dibuat baru (kosong) setiap kali ditekan Start.</div>
 
-<div class="cbi-page-actions" style="margin-bottom:8px">
-	<button class="cbi-button" onclick="dbLoadLog()">Refresh Now</button>
-	<label style="margin-left:12px"><input type="checkbox" id="db_autoscroll" checked> Auto-scroll</label>
+<div class="cbi-section">
+	<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; flex-wrap:wrap; gap:8px">
+		<div>
+			<button class="cbi-button cbi-button-apply" onclick="dbLoadLog()">Refresh Now</button>
+			<label style="margin-left:12px"><input type="checkbox" id="db_autoscroll" checked> Auto-scroll</label>
+			<label style="margin-left:12px"><input type="checkbox" id="db_autorefresh" checked> Auto-refresh (3s)</label>
+		</div>
+		<div id="db_log_meta" style="color:#888; font-size:12px"></div>
+	</div>
+
+	<div id="db_log_box" style="background:#0d1117; color:#c9d1d9; font-family:monospace; font-size:13px; line-height:1.5; height:600px; overflow-y:auto; border-radius:8px; padding:14px; border:1px solid #30363d"></div>
 </div>
-
-<textarea id="db_log" readonly style="width:100%; height:560px; font-family:monospace; font-size:12px; background:#111; color:#0f0"></textarea>
 
 <script type="text/javascript">
 	var dbLogUrl = '<%=luci.dispatcher.build_url("admin/services/danbox/log_data")%>';
+	var dbTimer = null;
+
+	function dbEscapeHtml(s) {
+		return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+	}
+
+	function dbRenderLine(line) {
+		var style = 'padding:1px 0';
+		if (/gagal|error/i.test(line)) {
+			style += ';color:#ff7b72';
+		} else if (/berhasil|selesai/i.test(line)) {
+			style += ';color:#3fb950';
+		} else if (/^=== /.test(line)) {
+			style += ';color:#58a6ff;font-weight:bold;margin-top:6px';
+		} else {
+			style += ';color:#c9d1d9';
+		}
+		return '<div style="' + style + '">' + dbEscapeHtml(line) + '</div>';
+	}
 
 	function dbLoadLog() {
 		fetch(dbLogUrl).then(r => r.json()).then(function(d) {
-			var box = document.getElementById('db_log');
-			box.value = d.log || '';
+			var box = document.getElementById('db_log_box');
+			var lines = (d.log || '').split('\n').filter(function(l) { return l.length > 0; });
+			box.innerHTML = lines.length ? lines.map(dbRenderLine).join('') : '<div style="color:#888">(log kosong — belum pernah Start, atau baru saja di-Stop)</div>';
+			document.getElementById('db_log_meta').textContent = lines.length + ' baris \u00b7 diperbarui ' + new Date().toLocaleTimeString();
 			if (document.getElementById('db_autoscroll').checked) {
 				box.scrollTop = box.scrollHeight;
 			}
 		});
 	}
 
+	function dbToggleAutoRefresh() {
+		if (dbTimer) { clearInterval(dbTimer); dbTimer = null; }
+		if (document.getElementById('db_autorefresh').checked) {
+			dbTimer = setInterval(dbLoadLog, 3000);
+		}
+	}
+
+	document.getElementById('db_autorefresh').addEventListener('change', dbToggleAutoRefresh);
+
 	dbLoadLog();
-	setInterval(dbLoadLog, 3000);
+	dbToggleAutoRefresh();
 </script>
 
 <%+footer%>
