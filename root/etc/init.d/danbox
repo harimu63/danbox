@@ -9,6 +9,12 @@ USE_PROCD=1
 CONF="danbox"
 NFT_FILE="/etc/danbox-tproxy.nft"
 NFT_TABLE="danbox_tproxy"
+LOG_FILE="/var/log/danbox.log"
+
+log_step() {
+	echo "$(date '+%Y-%m-%d %H:%M:%S') $1" >> "$LOG_FILE"
+	logger -t danbox "$1"
+}
 
 setup_network() {
 	local tproxy_port fwmark self_mark rtable
@@ -18,7 +24,6 @@ setup_network() {
 	config_get self_mark   config self_mark   0xff
 	config_get rtable      config rtable      100
 
-	# bersihkan sisa rule lama dulu (jaga-jaga, sama seperti stop-singbox.sh)
 	nft delete table inet "$NFT_TABLE" 2>/dev/null
 	ip rule del fwmark "$fwmark" lookup "$rtable" 2>/dev/null
 	ip route flush table "$rtable" 2>/dev/null
@@ -42,15 +47,15 @@ table inet $NFT_TABLE {
 }
 EOF
 
-	nft -f "$NFT_FILE" || {
-		logger -t danbox "gagal load nftables rule dari $NFT_FILE"
+	if ! nft -f "$NFT_FILE" 2>>"$LOG_FILE"; then
+		log_step "GAGAL memasang nftables rule dari $NFT_FILE"
 		return 1
-	}
+	fi
 
-	ip rule add fwmark "$fwmark" lookup "$rtable"
-	ip route add local 0.0.0.0/0 dev lo table "$rtable"
+	ip rule add fwmark "$fwmark" lookup "$rtable" 2>>"$LOG_FILE"
+	ip route add local 0.0.0.0/0 dev lo table "$rtable" 2>>"$LOG_FILE"
 
-	logger -t danbox "nftables tproxy + ip rule/route terpasang (port=$tproxy_port fwmark=$fwmark table=$rtable)"
+	log_step "nftables tproxy + ip rule/route terpasang (port=$tproxy_port fwmark=$fwmark table=$rtable)"
 }
 
 teardown_network() {
@@ -58,8 +63,8 @@ teardown_network() {
 	config_get fwmark config fwmark 0x1
 	config_get rtable config rtable 100
 
-	nft delete table inet "$NFT_TABLE" 2>/dev/null && logger -t danbox "table $NFT_TABLE dihapus"
-	ip rule del fwmark "$fwmark" lookup "$rtable" 2>/dev/null && logger -t danbox "ip rule dihapus"
+	nft delete table inet "$NFT_TABLE" 2>/dev/null && log_step "Table nftables $NFT_TABLE dihapus."
+	ip rule del fwmark "$fwmark" lookup "$rtable" 2>/dev/null && log_step "ip rule dihapus."
 	ip route flush table "$rtable" 2>/dev/null
 }
 
@@ -74,53 +79,75 @@ start_service() {
 	config_get start_delay config start_delay 0
 	config_get test_config config test_config 1
 
-	[ "$enabled" = "1" ] || {
-		logger -t danbox "service disabled, tidak start"
+	# log baru tiap kali Start ditekan -> log lama otomatis hilang
+	: > "$LOG_FILE"
+
+	log_step "=== [1/6] Memvalidasi konfigurasi ==="
+
+	if [ "$enabled" != "1" ]; then
+		log_step "Service dalam kondisi disabled, start dibatalkan."
 		return 1
-	}
-
-	[ -x "$bin_path" ] || {
-		logger -t danbox "binary tidak ditemukan/tidak executable: $bin_path"
-		return 1
-	}
-
-	local cfg_path="${config_dir}/${config_file}"
-	[ -f "$cfg_path" ] || {
-		logger -t danbox "config tidak ditemukan: $cfg_path"
-		return 1
-	}
-
-	[ "$start_delay" -gt 0 ] 2>/dev/null && sleep "$start_delay"
-
-	if [ "$test_config" = "1" ]; then
-		"$bin_path" check -c "$cfg_path" -D "$config_dir" >/tmp/danbox_check.log 2>&1 || {
-			logger -t danbox "config test gagal, batal start (lihat /tmp/danbox_check.log)"
-			return 1
-		}
 	fi
 
-	setup_network || {
-		logger -t danbox "setup nftables/ip rule gagal, batal start sing-box"
+	if [ ! -x "$bin_path" ]; then
+		log_step "GAGAL: binary tidak ditemukan atau tidak executable ($bin_path)"
 		return 1
+	fi
+
+	local cfg_path="${config_dir}/${config_file}"
+	if [ ! -f "$cfg_path" ]; then
+		log_step "GAGAL: file config tidak ditemukan ($cfg_path)"
+		return 1
+	fi
+	log_step "Konfigurasi valid: $cfg_path"
+
+	[ "$start_delay" -gt 0 ] 2>/dev/null && {
+		log_step "Menunggu start delay ${start_delay}s..."
+		sleep "$start_delay"
 	}
 
-	logger -t danbox "starting sing-box: $bin_path run -c $cfg_path -D $config_dir"
+	if [ "$test_config" = "1" ]; then
+		log_step "=== [2/6] Menguji konfigurasi (sing-box check) ==="
+		if ! "$bin_path" check -c "$cfg_path" -D "$config_dir" >>"$LOG_FILE" 2>&1; then
+			log_step "GAGAL: sing-box check menemukan error pada config. Start dibatalkan."
+			return 1
+		fi
+		log_step "Config lolos pengujian, tidak ada error."
+	fi
+
+	log_step "=== [3/6] Membersihkan sisa rule lama (jaga-jaga) ==="
+	log_step "=== [4/6] Memasang nftables tproxy + ip rule/route ==="
+	if ! setup_network; then
+		log_step "GAGAL memasang jaringan, sing-box tidak dijalankan."
+		return 1
+	fi
+
+	log_step "=== [5/6] Menjalankan proses sing-box ==="
+	log_step "Command: $bin_path run -c $cfg_path -D $config_dir"
 
 	procd_open_instance danbox
-	procd_set_param command "$bin_path" run -c "$cfg_path" -D "$config_dir"
+	procd_set_param command /bin/sh -c "exec '$bin_path' run -c '$cfg_path' -D '$config_dir' >>'$LOG_FILE' 2>&1"
 	procd_set_param respawn 3600 5 5
-	procd_set_param stdout 1
-	procd_set_param stderr 1
 	procd_set_param term_timeout 10
 	procd_set_param file "$cfg_path"
 	procd_set_param limits nofile="65535 65535"
 	procd_close_instance
+
+	sleep 2
+	log_step "=== [6/6] Memeriksa status sing-box ==="
+	if pgrep -f "$bin_path run" >/dev/null 2>&1; then
+		log_step "sing-box BERHASIL berjalan, tidak ada error. PID $(pgrep -f "$bin_path run" | head -n1)"
+		log_step "Buka Dashboard lewat tombol OPEN DASHBOARD di App Config."
+	else
+		log_step "GAGAL: sing-box tidak terdeteksi berjalan setelah start. Cek baris di atas untuk detail error."
+	fi
 }
 
 stop_service() {
 	config_load "$CONF"
-	logger -t danbox "stopping sing-box, membersihkan nftables/ip rule/route"
+	log_step "=== Menghentikan sing-box ==="
 	teardown_network
+	log_step "Selesai. Sistem sudah bersih dari sing-box."
 }
 
 service_triggers() {
