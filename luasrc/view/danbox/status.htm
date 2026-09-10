@@ -9,7 +9,7 @@
 		<tr class="tr table-titles">
 			<th class="th">Core Version</th>
 			<th class="th">Core Status</th>
-			<th class="th" style="width:420px">Actions</th>
+			<th class="th" style="width:520px">Actions</th>
 		</tr>
 		<tr class="tr">
 			<td class="td" id="db_version">-</td>
@@ -19,6 +19,7 @@
 				<button class="cbi-button cbi-button-remove" onclick="dbCtl('stop')">STOP</button>
 				<button class="cbi-button cbi-button-reset" onclick="dbCtl('restart')">RESTART</button>
 				<button class="cbi-button" onclick="dbCtl('reload')">RELOAD</button>
+				<button class="cbi-button cbi-button-action" onclick="dbOpenDashboard()">OPEN DASHBOARD</button>
 			</td>
 		</tr>
 	</table>
@@ -70,10 +71,20 @@
 			<td class="td left"><label>Routing Table</label></td>
 			<td class="td left"><input type="text" id="db_rtable" class="cbi-input-text" style="width:150px"></td>
 		</tr>
+		<tr class="tr">
+			<td class="td left"><label>Dashboard Port (clash_api)</label></td>
+			<td class="td left"><input type="text" id="db_dashboard_port" class="cbi-input-text" style="width:150px"></td>
+		</tr>
 	</table>
 	<div class="cbi-page-actions">
 		<button class="cbi-button cbi-button-save" onclick="dbSaveConfig()">Save &amp; Apply</button>
 	</div>
+</div>
+
+<div class="cbi-section">
+	<h3>Log (live)</h3>
+	<div class="cbi-map-descr" style="margin-top:-6px">Tampilan cepat. Untuk log penuh &amp; rapi, buka tab Log.</div>
+	<div id="db_home_log" style="background:#111; color:#ddd; font-family:monospace; font-size:12px; height:220px; overflow-y:auto; border-radius:6px; padding:10px; white-space:pre-wrap"></div>
 </div>
 
 <script type="text/javascript">
@@ -81,8 +92,10 @@
 		status:  '<%=luci.dispatcher.build_url("admin/services/danbox/status_json")%>',
 		ctl:     '<%=luci.dispatcher.build_url("admin/services/danbox/ctl")%>',
 		cfgGet:  '<%=luci.dispatcher.build_url("admin/services/danbox/config_get")%>',
-		cfgSave: '<%=luci.dispatcher.build_url("admin/services/danbox/config_save")%>'
+		cfgSave: '<%=luci.dispatcher.build_url("admin/services/danbox/config_save")%>',
+		logData: '<%=luci.dispatcher.build_url("admin/services/danbox/log_data")%>'
 	};
+	var dbDashboardPort = '9090';
 
 	function dbRefreshStatus() {
 		fetch(dbUrl.status).then(r => r.json()).then(function(d) {
@@ -99,7 +112,13 @@
 		body.append('action', action);
 		fetch(dbUrl.ctl, { method: 'POST', body: body }).then(r => r.json()).then(function() {
 			setTimeout(dbRefreshStatus, 800);
+			setTimeout(dbLoadHomeLog, 1000);
 		});
+	}
+
+	function dbOpenDashboard() {
+		var url = 'http://' + window.location.hostname + ':' + dbDashboardPort + '/ui';
+		window.open(url, '_blank');
 	}
 
 	function dbLoadConfig() {
@@ -114,6 +133,8 @@
 			document.getElementById('db_fwmark').value = d.fwmark;
 			document.getElementById('db_self_mark').value = d.self_mark;
 			document.getElementById('db_rtable').value = d.rtable;
+			document.getElementById('db_dashboard_port').value = d.dashboard_port;
+			dbDashboardPort = d.dashboard_port || '9090';
 		});
 	}
 
@@ -129,14 +150,40 @@
 		body.append('fwmark', document.getElementById('db_fwmark').value);
 		body.append('self_mark', document.getElementById('db_self_mark').value);
 		body.append('rtable', document.getElementById('db_rtable').value);
+		body.append('dashboard_port', document.getElementById('db_dashboard_port').value);
 		fetch(dbUrl.cfgSave, { method: 'POST', body: body }).then(r => r.json()).then(function(d) {
-			if (d.ok) alert('Saved. Restart the service to apply.');
+			if (d.ok) {
+				dbDashboardPort = document.getElementById('db_dashboard_port').value || '9090';
+				alert('Saved. Restart the service to apply.');
+			}
+		});
+	}
+
+	function dbEscapeHtml(s) {
+		return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+	}
+
+	function dbLoadHomeLog() {
+		fetch(dbUrl.logData).then(r => r.json()).then(function(d) {
+			var box = document.getElementById('db_home_log');
+			var lines = (d.log || '').split('\n');
+			var html = lines.map(function(line) {
+				var cls = '';
+				if (/gagal|error/i.test(line)) cls = 'color:#ff6b6b';
+				else if (/berhasil|selesai/i.test(line)) cls = 'color:#4fd18b';
+				else if (/^=== /.test(line)) cls = 'color:#6cb2ff;font-weight:bold';
+				return '<div style="' + cls + '">' + dbEscapeHtml(line) + '</div>';
+			}).join('');
+			box.innerHTML = html;
+			box.scrollTop = box.scrollHeight;
 		});
 	}
 
 	dbRefreshStatus();
 	dbLoadConfig();
+	dbLoadHomeLog();
 	setInterval(dbRefreshStatus, 3000);
+	setInterval(dbLoadHomeLog, 3000);
 </script>
 
 <%+footer%>
