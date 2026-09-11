@@ -77,16 +77,17 @@
 	</table>
 	<div class="cbi-page-actions">
 		<button class="cbi-button cbi-button-save" onclick="dbSaveConfig()">Save &amp; Apply</button>
+		<span id="db_apply_info" style="margin-left:12px; font-weight:bold"></span>
 	</div>
 </div>
 
 <div class="cbi-section">
 	<h3>Log</h3>
-	<div class="cbi-map-descr" style="margin-top:-6px">Tidak auto-refresh. Diperbarui saat kamu Save &amp; Apply / Restart / Reload, atau tekan tombol di bawah. Log direset hanya saat service benar-benar di-start (Enable dicentang + Save &amp; Apply).</div>
+	<div class="cbi-map-descr" style="margin-top:-6px">Direset hanya saat service benar-benar di-start. Auto-refresh singkat aktif otomatis setiap Save &amp; Apply / Restart / Reload (berhenti sendiri setelah ~12 detik) — tidak auto-refresh terus-menerus.</div>
 	<div style="margin-bottom:8px">
 		<button class="cbi-button" onclick="dbLoadHomeLog()">Refresh Log</button>
 	</div>
-	<div id="db_home_log" style="background:#0d1117; color:#c9d1d9; font-family:monospace; font-size:12px; height:220px; overflow-y:auto; border-radius:6px; padding:10px; white-space:pre-wrap; border:1px solid #30363d"></div>
+	<div id="db_home_log" style="background:#0d1117; color:#c9d1d9; font-family:monospace; font-size:12px; height:240px; overflow-y:auto; border-radius:6px; padding:10px; white-space:pre-wrap; border:1px solid #30363d"></div>
 </div>
 
 <script type="text/javascript">
@@ -98,23 +99,46 @@
 		logData: '<%=luci.dispatcher.build_url("admin/services/danbox/log_data")%>'
 	};
 	var dbDashboardPort = '9090';
+	var dbBurstTimer = null;
 
-	function dbRefreshStatus() {
+	function dbRefreshStatus(cb) {
 		fetch(dbUrl.status).then(r => r.json()).then(function(d) {
 			document.getElementById('db_version').textContent = d.version || 'unknown';
 			var el = document.getElementById('db_status');
 			el.textContent = d.running ? 'Running' : 'Not Running';
 			el.style.color = d.running ? '#2d862d' : '#c0392b';
 			el.style.fontWeight = 'bold';
+			if (cb) cb(d.running);
 		});
 	}
 
+	// refresh log tiap 1.5 detik selama ~12 detik setelah start/stop/restart,
+	// lalu berhenti sendiri -- bukan auto-refresh permanen.
+	function dbBurstRefresh() {
+		if (dbBurstTimer) { clearInterval(dbBurstTimer); dbBurstTimer = null; }
+		var ticks = 0;
+		dbBurstTimer = setInterval(function() {
+			dbLoadHomeLog();
+			dbRefreshStatus();
+			ticks++;
+			if (ticks >= 8) { clearInterval(dbBurstTimer); dbBurstTimer = null; }
+		}, 1500);
+	}
+
 	function dbCtl(action) {
+		var info = document.getElementById('db_apply_info');
+		info.style.color = '#58a6ff';
+		info.textContent = action === 'stop' ? 'Mematikan service...' : 'Menjalankan service...';
 		var body = new FormData();
 		body.append('action', action);
-		fetch(dbUrl.ctl, { method: 'POST', body: body }).then(r => r.json()).then(function() {
-			setTimeout(dbRefreshStatus, 1500);
-			setTimeout(dbLoadHomeLog, 2000);
+		fetch(dbUrl.ctl, { method: 'POST', body: body }).then(function() {
+			dbBurstRefresh();
+			setTimeout(function() {
+				dbRefreshStatus(function(running) {
+					info.style.color = running ? '#3fb950' : (action === 'stop' ? '#3fb950' : '#ff7b72');
+					info.textContent = running ? 'Service menyala.' : (action === 'stop' ? 'Service dimatikan.' : 'Gagal menyala, cek Log.');
+				});
+			}, 5000);
 		});
 	}
 
@@ -142,6 +166,10 @@
 
 	function dbSaveConfig() {
 		var enabled = document.getElementById('db_enabled').checked;
+		var info = document.getElementById('db_apply_info');
+		info.style.color = '#58a6ff';
+		info.textContent = 'Menyimpan konfigurasi...';
+
 		var body = new FormData();
 		body.append('enabled', enabled ? '1' : '0');
 		body.append('bin_path', document.getElementById('db_bin_path').value);
@@ -156,15 +184,27 @@
 		body.append('dashboard_port', document.getElementById('db_dashboard_port').value);
 
 		fetch(dbUrl.cfgSave, { method: 'POST', body: body }).then(r => r.json()).then(function(d) {
-			if (!d.ok) { alert('Gagal menyimpan config.'); return; }
+			if (!d.ok) { info.style.color = '#ff7b72'; info.textContent = 'Gagal menyimpan config.'; return; }
 			dbDashboardPort = document.getElementById('db_dashboard_port').value || '9090';
 
-			// Enable dicentang -> (re)start service. Tidak dicentang -> stop service.
+			info.style.color = '#58a6ff';
+			info.textContent = 'Konfigurasi tersimpan. ' + (enabled ? 'Menyalakan service...' : 'Mematikan service...');
+
 			var ctlBody = new FormData();
 			ctlBody.append('action', enabled ? 'restart' : 'stop');
 			fetch(dbUrl.ctl, { method: 'POST', body: ctlBody }).then(function() {
-				setTimeout(dbRefreshStatus, 1500);
-				setTimeout(dbLoadHomeLog, 2000);
+				dbBurstRefresh();
+				setTimeout(function() {
+					dbRefreshStatus(function(running) {
+						if (enabled) {
+							info.style.color = running ? '#3fb950' : '#ff7b72';
+							info.textContent = running ? 'Service berhasil menyala.' : 'Gagal menyala, cek Log untuk detail error.';
+						} else {
+							info.style.color = '#3fb950';
+							info.textContent = 'Service berhasil dimatikan.';
+						}
+					});
+				}, 5000);
 			});
 		});
 	}
@@ -172,27 +212,33 @@
 	function dbEscapeHtml(s) {
 		return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 	}
+	// buang kode warna ANSI mentah (mis. dari output sing-box: ESC[31mFATAL...ESC[0m)
+	function dbStripAnsi(s) {
+		return s.replace(/\x1b\[[0-9;]*m/g, '');
+	}
+
+	function dbClassifyLine(line) {
+		if (/fatal|gagal|error/i.test(line)) return 'color:#ff7b72';
+		if (/berhasil|selesai|valid|lolos|terpasang/i.test(line)) return 'color:#3fb950';
+		if (/^\d{4}-\d\d-\d\d .*=== /.test(line)) return 'color:#58a6ff;font-weight:bold';
+		return 'color:#c9d1d9';
+	}
 
 	function dbLoadHomeLog() {
 		fetch(dbUrl.logData).then(r => r.json()).then(function(d) {
 			var box = document.getElementById('db_home_log');
-			var lines = (d.log || '').split('\n').filter(function(l) { return l.length > 0; });
+			var lines = (d.log || '').split('\n').map(dbStripAnsi).filter(function(l) { return l.length > 0; });
 			if (!lines.length) {
 				box.innerHTML = '<div style="color:#888">(log kosong)</div>';
 				return;
 			}
 			box.innerHTML = lines.map(function(line) {
-				var cls = '';
-				if (/gagal|error/i.test(line)) cls = 'color:#ff7b72';
-				else if (/berhasil|selesai/i.test(line)) cls = 'color:#3fb950';
-				else if (/^=== /.test(line)) cls = 'color:#58a6ff;font-weight:bold';
-				return '<div style="' + cls + '">' + dbEscapeHtml(line) + '</div>';
+				return '<div style="' + dbClassifyLine(line) + '">' + dbEscapeHtml(line) + '</div>';
 			}).join('');
 			box.scrollTop = box.scrollHeight;
 		});
 	}
 
-	// hanya load sekali di awal, TIDAK ada auto-refresh berkala untuk log.
 	dbRefreshStatus();
 	dbLoadConfig();
 	dbLoadHomeLog();
