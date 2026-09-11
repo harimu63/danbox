@@ -1,7 +1,7 @@
 <%+header%>
 
 <h2 name="content">DanBox - Log</h2>
-<div class="cbi-map-descr">Log service sing-box. Direset hanya saat service benar-benar di-start (Enable dicentang + Save &amp; Apply). Tidak auto-refresh — tekan Refresh Now untuk melihat log terbaru.</div>
+<div class="cbi-map-descr">Log service sing-box. Direset hanya saat service benar-benar di-start (Enable dicentang + Save &amp; Apply). Tidak auto-refresh terus-menerus — tekan Refresh Now untuk log terbaru.</div>
 
 <div class="cbi-section">
 	<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; flex-wrap:wrap; gap:8px">
@@ -12,7 +12,7 @@
 		<div id="db_log_meta" style="color:#888; font-size:12px"></div>
 	</div>
 
-	<div id="db_log_box" style="background:#0d1117; color:#c9d1d9; font-family:monospace; font-size:13px; line-height:1.5; height:600px; overflow-y:auto; border-radius:8px; padding:14px; border:1px solid #30363d"></div>
+	<div id="db_log_box" style="background:#0d1117; color:#c9d1d9; font-family:monospace; font-size:13px; line-height:1.6; height:600px; overflow-y:auto; border-radius:8px; padding:14px; border:1px solid #30363d"></div>
 </div>
 
 <script type="text/javascript">
@@ -21,15 +21,19 @@
 	function dbEscapeHtml(s) {
 		return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 	}
+	// buang kode warna ANSI mentah dari output sing-box (mis. ESC[31mFATAL...ESC[0m)
+	function dbStripAnsi(s) {
+		return String(s).replace(/\x1b\[[0-9;]*m/g, '');
+	}
 
 	function dbRenderLine(line) {
-		var style = 'padding:1px 0';
-		if (/gagal|error/i.test(line)) {
-			style += ';color:#ff7b72';
-		} else if (/berhasil|selesai/i.test(line)) {
+		var style = 'padding:2px 0';
+		if (/fatal|gagal|error/i.test(line)) {
+			style += ';color:#ff7b72;font-weight:bold';
+		} else if (/berhasil|selesai|valid|lolos|terpasang/i.test(line)) {
 			style += ';color:#3fb950';
-		} else if (/^=== /.test(line)) {
-			style += ';color:#58a6ff;font-weight:bold;margin-top:6px';
+		} else if (/^\d{4}-\d\d-\d\d .*=== /.test(line)) {
+			style += ';color:#58a6ff;font-weight:bold;margin-top:8px';
 		} else {
 			style += ';color:#c9d1d9';
 		}
@@ -39,7 +43,7 @@
 	function dbLoadLog() {
 		fetch(dbLogUrl).then(r => r.json()).then(function(d) {
 			var box = document.getElementById('db_log_box');
-			var lines = (d.log || '').split('\n').filter(function(l) { return l.length > 0; });
+			var lines = (d.log || '').split('\n').map(dbStripAnsi).filter(function(l) { return l.length > 0; });
 			box.innerHTML = lines.length ? lines.map(dbRenderLine).join('') : '<div style="color:#888">(log kosong)</div>';
 			document.getElementById('db_log_meta').textContent = lines.length + ' baris \u00b7 dimuat ' + new Date().toLocaleTimeString();
 			if (document.getElementById('db_autoscroll').checked) {
@@ -48,7 +52,6 @@
 		});
 	}
 
-	// hanya load sekali saat halaman dibuka -> TIDAK ada setInterval / auto-refresh berkala
 	dbLoadLog();
 </script>
 
