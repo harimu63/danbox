@@ -1,0 +1,155 @@
+<%+header%>
+
+<h2 name="content">DanBox - Update Core</h2>
+<div class="cbi-map-descr">Download atau update binary sing-box langsung dari <a href="https://github.com/SagerNet/sing-box/releases" target="_blank">GitHub Releases resmi SagerNet</a>. Binary otomatis di-<code>chmod 755</code> setelah dipasang.</div>
+
+<div class="cbi-section">
+	<table class="table" style="max-width:750px">
+		<tr class="tr table-titles">
+			<th class="th">Versi Terpasang</th>
+			<th class="th">Versi Terbaru (GitHub)</th>
+			<th class="th">Status</th>
+		</tr>
+		<tr class="tr">
+			<td class="td" id="db_installed_ver">-</td>
+			<td class="td" id="db_latest_ver">-</td>
+			<td class="td" id="db_ver_status">-</td>
+		</tr>
+	</table>
+	<div class="cbi-page-actions">
+		<button class="cbi-button" onclick="dbCheckLatest()">Cek Versi Terbaru</button>
+		<button class="cbi-button cbi-button-apply" id="db_update_btn" onclick="dbRunUpdate()">Download / Update Sekarang</button>
+	</div>
+</div>
+
+<div class="cbi-section">
+	<h3>Log Update</h3>
+	<div class="cbi-map-descr" style="margin-top:-6px">Direset otomatis tiap kali proses download/update dijalankan.</div>
+	<div style="margin-bottom:8px">
+		<button class="cbi-button" onclick="dbLoadUpdateLog()">Refresh Log</button>
+	</div>
+	<div id="db_update_log" style="background:#0d1117; color:#c9d1d9; font-family:monospace; font-size:12px; line-height:1.6; height:340px; overflow-y:auto; border-radius:8px; padding:12px; white-space:pre-wrap; border:1px solid #30363d"></div>
+</div>
+
+<script type="text/javascript">
+	var dbUrl = {
+		installed: '<%=luci.dispatcher.build_url("admin/services/danbox/core_installed")%>',
+		latest:    '<%=luci.dispatcher.build_url("admin/services/danbox/core_latest")%>',
+		run:       '<%=luci.dispatcher.build_url("admin/services/danbox/core_update")%>',
+		logData:   '<%=luci.dispatcher.build_url("admin/services/danbox/log_data")%>'
+	};
+	var dbPollTimer = null;
+	var dbLatestCache = null;
+
+	function dbEscapeHtml(s) {
+		return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+	}
+	function dbStripAnsi(s) {
+		return String(s).replace(/\x1b\[[0-9;]*m/g, '');
+	}
+	function dbRenderLine(line) {
+		var style = 'padding:2px 0';
+		if (/fatal|gagal|error/i.test(line)) style += ';color:#ff7b72;font-weight:bold';
+		else if (/berhasil|selesai|terpasang|ditemukan|sudah versi terbaru/i.test(line)) style += ';color:#3fb950';
+		else if (/^\d{4}-\d\d-\d\d .*=== /.test(line)) style += ';color:#58a6ff;font-weight:bold;margin-top:8px';
+		else style += ';color:#c9d1d9';
+		return '<div style="' + style + '">' + dbEscapeHtml(line) + '</div>';
+	}
+
+	function dbLoadInstalled() {
+		fetch(dbUrl.installed).then(r => r.json()).then(function(d) {
+			document.getElementById('db_installed_ver').textContent = d.installed || '(belum ada)';
+			dbCompareVersions();
+		});
+	}
+
+	function dbCheckLatest() {
+		document.getElementById('db_latest_ver').textContent = 'Mengecek...';
+		fetch(dbUrl.latest).then(r => r.json()).then(function(d) {
+			if (!d.ok) {
+				document.getElementById('db_latest_ver').textContent = '-';
+				var st = document.getElementById('db_ver_status');
+				st.textContent = d.msg || 'Gagal cek versi.';
+				st.style.color = '#ff7b72';
+				return;
+			}
+			dbLatestCache = d.latest;
+			document.getElementById('db_latest_ver').textContent = d.latest;
+			dbCompareVersions();
+		});
+	}
+
+	function dbCompareVersions() {
+		var installed = document.getElementById('db_installed_ver').textContent;
+		var st = document.getElementById('db_ver_status');
+		if (!dbLatestCache) {
+			st.textContent = 'Klik "Cek Versi Terbaru".';
+			st.style.color = '#888';
+			return;
+		}
+		if (installed === '(belum ada)') {
+			st.textContent = 'Core belum terpasang.';
+			st.style.color = '#ff7b72';
+		} else if (('v' + installed) === dbLatestCache || installed === dbLatestCache) {
+			st.textContent = 'Sudah versi terbaru.';
+			st.style.color = '#3fb950';
+		} else {
+			st.textContent = 'Update tersedia!';
+			st.style.color = '#d29922';
+		}
+	}
+
+	function dbRunUpdate() {
+		if (!confirm('Download/update sing-box sekarang? Kalau service sedang jalan, akan dihentikan sementara lalu dinyalakan lagi setelah selesai.')) return;
+		document.getElementById('db_update_btn').disabled = true;
+		var st = document.getElementById('db_ver_status');
+		st.textContent = 'Sedang memproses...';
+		st.style.color = '#58a6ff';
+		document.getElementById('db_update_log').innerHTML = '<div style="color:#888">(memulai proses, menunggu log...)</div>';
+
+		fetch(dbUrl.run, { method: 'POST' }).then(function() {
+			dbStartPolling();
+		});
+	}
+
+	function dbStartPolling() {
+		if (dbPollTimer) clearInterval(dbPollTimer);
+		var ticks = 0;
+		dbPollTimer = setInterval(function() {
+			ticks++;
+			fetch(dbUrl.logData + '?type=update').then(r => r.json()).then(function(d) {
+				var lines = (d.log || '').split('\n').map(dbStripAnsi).filter(function(l) { return l.length > 0; });
+				var box = document.getElementById('db_update_log');
+				box.innerHTML = lines.length ? lines.map(dbRenderLine).join('') : '<div style="color:#888">(log kosong)</div>';
+				box.scrollTop = box.scrollHeight;
+
+				var text = lines.join('\n');
+				if (/BERHASIL: sing-box berhasil/i.test(text) || /GAGAL:/i.test(text) || /Sudah versi terbaru/i.test(text)) {
+					clearInterval(dbPollTimer);
+					dbPollTimer = null;
+					document.getElementById('db_update_btn').disabled = false;
+					dbLoadInstalled();
+				}
+				if (ticks > 45) { // safety stop ~90 detik kalau tidak ada penanda selesai
+					clearInterval(dbPollTimer);
+					dbPollTimer = null;
+					document.getElementById('db_update_btn').disabled = false;
+				}
+			});
+		}, 2000);
+	}
+
+	function dbLoadUpdateLog() {
+		fetch(dbUrl.logData + '?type=update').then(r => r.json()).then(function(d) {
+			var lines = (d.log || '').split('\n').map(dbStripAnsi).filter(function(l) { return l.length > 0; });
+			var box = document.getElementById('db_update_log');
+			box.innerHTML = lines.length ? lines.map(dbRenderLine).join('') : '<div style="color:#888">(log kosong)</div>';
+			box.scrollTop = box.scrollHeight;
+		});
+	}
+
+	dbLoadInstalled();
+	dbLoadUpdateLog();
+</script>
+
+<%+footer%>
