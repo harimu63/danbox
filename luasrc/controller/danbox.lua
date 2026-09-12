@@ -285,7 +285,26 @@ function action_core_latest()
 end
 
 function action_core_update()
-	sys.call(UPDATE_SCRIPT .. " >/dev/null 2>&1 &")
 	http.prepare_content("application/json")
+
+	if not fs.access(UPDATE_SCRIPT) then
+		http.write_json({ ok = false, msg = "Script update tidak ditemukan di " .. UPDATE_SCRIPT .. ". Cek apakah package terinstal dengan benar." })
+		return
+	end
+
+	-- jaga-jaga: paksa executable tiap kali dipanggil, kalau-kalau bit +x
+	-- hilang waktu packaging/opkg install (persis kasus init.d kemarin)
+	sys.call("chmod +x " .. util.shellquote(UPDATE_SCRIPT))
+
+	-- tulis marker awal langsung dari Lua, supaya kalau script gagal total
+	-- untuk jalan (mis. masih permission denied), user tetap lihat sesuatu
+	-- di log, bukan kosong melompong
+	fs.writefile(UPDATE_LOG, os.date("%Y-%m-%d %H:%M:%S") .. " Memicu proses update dari LuCI...\n")
+
+	-- PENTING: error dari shell (mis. "Permission denied", "not found") ikut
+	-- ditangkap ke UPDATE_LOG (bukan dibuang ke /dev/null), supaya kalau
+	-- script gagal start sama sekali, alasannya kelihatan jelas di log
+	sys.call(UPDATE_SCRIPT .. " >>" .. util.shellquote(UPDATE_LOG) .. " 2>&1 &")
+
 	http.write_json({ ok = true })
 end
