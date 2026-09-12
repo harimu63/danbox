@@ -9,10 +9,12 @@ USE_PROCD=1
 CONF="danbox"
 NFT_FILE="/etc/danbox-tproxy.nft"
 NFT_TABLE="danbox_tproxy"
-LOG_FILE="/var/log/danbox.log"
+APP_LOG="/var/log/danbox-app.log"
+CORE_LOG="/var/log/danbox-core.log"
 
+# log_step -> khusus pesan tahapan service/init script (App Log)
 log_step() {
-	echo "$(date '+%Y-%m-%d %H:%M:%S') $1" >> "$LOG_FILE"
+	echo "$(date '+%Y-%m-%d %H:%M:%S') $1" >> "$APP_LOG"
 	logger -t danbox "$1"
 }
 
@@ -47,13 +49,13 @@ table inet $NFT_TABLE {
 }
 EOF
 
-	if ! nft -f "$NFT_FILE" 2>>"$LOG_FILE"; then
+	if ! nft -f "$NFT_FILE" 2>>"$APP_LOG"; then
 		log_step "GAGAL memasang nftables rule dari $NFT_FILE"
 		return 1
 	fi
 
-	ip rule add fwmark "$fwmark" lookup "$rtable" 2>>"$LOG_FILE"
-	ip route add local 0.0.0.0/0 dev lo table "$rtable" 2>>"$LOG_FILE"
+	ip rule add fwmark "$fwmark" lookup "$rtable" 2>>"$APP_LOG"
+	ip route add local 0.0.0.0/0 dev lo table "$rtable" 2>>"$APP_LOG"
 
 	log_step "nftables tproxy + ip rule/route terpasang (port=$tproxy_port fwmark=$fwmark table=$rtable)"
 }
@@ -84,8 +86,10 @@ start_service() {
 		return 1
 	fi
 
-	# log baru cuma dibuat kalau memang benar-benar mau start
-	: > "$LOG_FILE"
+	# log baru cuma dibuat kalau memang benar-benar mau start -> App Log & Core Log
+	# dua-duanya langsung dikosongkan di sini (dipanggil pas Start ditekan)
+	: > "$APP_LOG"
+	: > "$CORE_LOG"
 
 	log_step "=== [1/6] Memvalidasi konfigurasi ==="
 
@@ -108,8 +112,8 @@ start_service() {
 
 	if [ "$test_config" = "1" ]; then
 		log_step "=== [2/6] Menguji konfigurasi (sing-box check) ==="
-		if ! "$bin_path" check -c "$cfg_path" -D "$config_dir" >>"$LOG_FILE" 2>&1; then
-			log_step "GAGAL: sing-box check menemukan error pada config. Start dibatalkan, nftables tidak dipasang."
+		if ! "$bin_path" check -c "$cfg_path" -D "$config_dir" >>"$CORE_LOG" 2>&1; then
+			log_step "GAGAL: sing-box check menemukan error pada config. Cek Core Log untuk detail. Start dibatalkan, nftables tidak dipasang."
 			return 1
 		fi
 		log_step "Config lolos pengujian awal (sing-box check), tidak ada error."
@@ -127,35 +131,41 @@ start_service() {
 	log_step "Command: $bin_path run -c $cfg_path -D $config_dir"
 
 	procd_open_instance danbox
-	procd_set_param command /bin/sh -c "exec '$bin_path' run -c '$cfg_path' -D '$config_dir' >>'$LOG_FILE' 2>&1"
+	procd_set_param command /bin/sh -c "exec '$bin_path' run -c '$cfg_path' -D '$config_dir' >>'$CORE_LOG' 2>&1"
 	procd_set_param respawn 3600 5 5
 	procd_set_param term_timeout 10
 	procd_set_param file "$cfg_path"
 	procd_set_param limits nofile="65535 65535"
 	procd_close_instance
 
-	log_step "=== [5/6] Memeriksa apakah proses benar-benar berjalan (bukan crash) ==="
+	log_step "=== [5/6] Memeriksa apakah proses stabil berjalan (bukan crash-loop) ==="
 
-	# retry: sing-box run bisa langsung crash (mis. error dependency outbound
-	# yang tidak kedeteksi oleh "sing-box check"), atau procd butuh waktu spawn.
-	# cek berkali-kali dan pastikan PID-nya konsisten hidup, bukan cuma sekilas.
-	local i=0 up=0
-	while [ "$i" -lt 6 ]; do
+	# harus hidup TERUS-MENERUS beberapa detik berturut-turut (bukan cuma
+	# sekilas kedeteksi di antara siklus crash->respawn->crash lagi)
+	local i=0 up=1
+	while [ "$i" -lt 5 ]; do
 		sleep 1
-		if pgrep -f "$bin_path run" >/dev/null 2>&1; then
-			up=1
+		if ! pgrep -f "$bin_path run" >/dev/null 2>&1; then
+			up=0
 			break
 		fi
 		i=$((i + 1))
 	done
 
+	# safety net tambahan: walau proses masih kedetect "hidup", kalau ada
+	# baris FATAL/panic di core log, tetap anggap gagal (crash-loop cepat)
+	if grep -qiE 'fatal|panic:' "$CORE_LOG" 2>/dev/null; then
+		up=0
+		log_step "Terdeteksi error FATAL pada output sing-box (lihat Core Log)."
+	fi
+
 	if [ "$up" != "1" ]; then
-		log_step "GAGAL: sing-box tidak berhasil berjalan (proses crash/berhenti setelah start). Lihat pesan error di atas untuk detailnya."
+		log_step "GAGAL: sing-box tidak stabil berjalan (crash / restart-loop). Cek Core Log untuk detail error."
 		log_step "=== [6/6] nftables TIDAK dipasang karena core gagal jalan ==="
 		return 1
 	fi
 
-	log_step "sing-box BERHASIL berjalan, tidak ada error. PID $(pgrep -f "$bin_path run" | head -n1)"
+	log_step "sing-box BERHASIL berjalan stabil, tidak ada error. PID $(pgrep -f "$bin_path run" | head -n1)"
 
 	log_step "=== [6/6] Memasang nftables tproxy + ip rule/route ==="
 	if ! setup_network; then
