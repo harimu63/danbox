@@ -148,12 +148,18 @@ start_service() {
 
 	log_step "=== [5/6] Memeriksa apakah proses berjalan ==="
 
-	# cek status LANGSUNG ke procd (bukan nunggu lama nebak-nebak pakai
-	# pgrep) -- cukup jeda sangat singkat buat procd mendaftarkan instance.
-	sleep 1
-
-	local up=0
-	is_running && up=1
+	# procd butuh sedikit waktu buat update status "running" secara
+	# internal setelah procd_close_instance -- retry singkat (bukan
+	# nunggu lama), berhenti begitu kedeteksi hidup.
+	local i=0 up=0
+	while [ "$i" -lt 8 ]; do
+		if is_running; then
+			up=1
+			break
+		fi
+		sleep 1
+		i=$((i + 1))
+	done
 
 	# kalau ada FATAL error asli dari sing-box, core-nya dimatikan BENERAN
 	# di sini (procd tidak otomatis berhenti hanya gara-gara start_service
