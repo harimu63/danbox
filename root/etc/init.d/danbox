@@ -149,9 +149,15 @@ start_service() {
 		sleep 1
 		i=$((i + 1))
 
-		if grep -qiE 'fatal|panic:' "$CORE_LOG" 2>/dev/null; then
+		# PENTING: pola dipersempit ke format asli fatal-log sing-box
+		# ("FATAL[0000] ...", uppercase, diikuti kurung siku). Pola lama
+		# ('fatal|panic:' case-insensitive) kebablasan -- sing-box punya
+		# banyak goroutine per-koneksi yang di-recover(), jadi 1 request
+		# gagal wajar pun bisa ikut ke-log dengan kata "panic:" padahal
+		# core-nya sendiri baik-baik saja.
+		if grep -qE 'FATAL\[' "$CORE_LOG" 2>/dev/null; then
 			up=0
-			log_step "Terdeteksi error FATAL pada output sing-box setelah ${i} detik (lihat Core Log)."
+			log_step "Terdeteksi FATAL error pada output sing-box setelah ${i} detik (lihat Core Log)."
 			break
 		fi
 
