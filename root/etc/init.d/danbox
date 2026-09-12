@@ -140,27 +140,30 @@ start_service() {
 
 	log_step "=== [5/6] Memeriksa apakah proses berjalan ==="
 
-	# beri waktu settle -- terutama pas boot / beban sistem lagi tinggi,
-	# pgrep sesekali bisa "meleset" walau prosesnya sebenarnya sehat.
-	sleep 3
-	local up=0
-	pgrep -f "$bin_path run" >/dev/null 2>&1 && up=1
+	# polling sampai 15 detik, TAPI langsung berhenti begitu kedeteksi
+	# hidup (biasanya cuma 1-2 detik) -- tidak lagi pakai window waktu
+	# tetap yang gampang kepotong kalau prosesnya butuh waktu agak lama
+	# buat settle (mis. lagi loading geoip/rule besar).
+	local i=0 up=0 max_wait=15
+	while [ "$i" -lt "$max_wait" ]; do
+		sleep 1
+		i=$((i + 1))
 
-	# safety net: kalau ada FATAL/panic di core log, override jadi gagal
-	# walau pgrep sempat positif (baru sempat nyala tapi langsung crash)
-	if grep -qiE 'fatal|panic:' "$CORE_LOG" 2>/dev/null; then
-		up=0
-		log_step "Terdeteksi error FATAL pada output sing-box (lihat Core Log)."
-	fi
-
-	# belum kedeteksi hidup? kasih 1 kesempatan tambahan (bisa jadi masih
-	# proses loading berat saat boot), bukan langsung divonis gagal
-	if [ "$up" != "1" ]; then
-		sleep 2
-		if pgrep -f "$bin_path run" >/dev/null 2>&1 && ! grep -qiE 'fatal|panic:' "$CORE_LOG" 2>/dev/null; then
-			up=1
-			log_step "Proses baru kedeteksi hidup setelah tambahan waktu tunggu (kemungkinan beban sistem lagi tinggi)."
+		if grep -qiE 'fatal|panic:' "$CORE_LOG" 2>/dev/null; then
+			up=0
+			log_step "Terdeteksi error FATAL pada output sing-box setelah ${i} detik (lihat Core Log)."
+			break
 		fi
+
+		if pgrep -f "$bin_path run" >/dev/null 2>&1; then
+			up=1
+			log_step "Proses terdeteksi hidup setelah ${i} detik."
+			break
+		fi
+	done
+
+	if [ "$up" != "1" ] && [ "$i" -ge "$max_wait" ]; then
+		log_step "Proses tidak kunjung terdeteksi hidup setelah ${max_wait} detik."
 	fi
 
 	if [ "$up" != "1" ]; then
