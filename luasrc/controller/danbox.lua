@@ -6,7 +6,8 @@ local util = require "luci.util"
 local http = require "luci.http"
 local uci  = require "luci.model.uci".cursor()
 
-local LOG_FILE = "/var/log/danbox.log"
+local APP_LOG  = "/var/log/danbox-app.log"
+local CORE_LOG = "/var/log/danbox-core.log"
 
 function index()
 	if not fs.access("/etc/config/danbox") then
@@ -240,7 +241,9 @@ end
 -- ---------------------------------------------------------------------
 
 function action_log_data()
-	local out = sys.exec("tail -n 400 " .. util.shellquote(LOG_FILE) .. " 2>/dev/null") or ""
+	local t = http.formvalue("type") or "app"
+	local path = (t == "core") and CORE_LOG or APP_LOG
+	local out = sys.exec("tail -n 400 " .. util.shellquote(path) .. " 2>/dev/null") or ""
 	http.prepare_content("application/json")
-	http.write_json({ log = out })
+	http.write_json({ log = out, type = t })
 end
