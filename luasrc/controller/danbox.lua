@@ -83,7 +83,10 @@ end
 
 function action_status_json()
 	local cfg = get_cfg()
-	local running = (sys.call("pgrep -f '" .. cfg.bin_path .. " run' >/dev/null 2>&1") == 0)
+	-- pgrep -f terbukti tidak reliable di beberapa sistem (procd/ujail
+	-- mengubah cmdline yang terlihat) -- tanya langsung ke procd via ubus
+	local svc_json = sys.exec("ubus call service list '{\"name\":\"danbox\"}' 2>/dev/null") or ""
+	local running = svc_json:match('"running"%s*:%s*true') ~= nil
 	local ver = sys.exec("'" .. cfg.bin_path .. "' version 2>/dev/null | head -n1") or ""
 
 	http.prepare_content("application/json")

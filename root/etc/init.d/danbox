@@ -18,6 +18,14 @@ log_step() {
 	logger -t danbox "$1"
 }
 
+# is_running -> tanya LANGSUNG ke procd lewat ubus, bukan tebak-tebakan
+# pattern-matching pgrep (terbukti tidak reliable di sistem ini, kemungkinan
+# karena procd/ujail mengubah cmdline yang terlihat oleh pgrep -f). Ini
+# sumber kebenaran yang sama persis dipakai `/etc/init.d/danbox status`.
+is_running() {
+	ubus call service list "{\"name\":\"$CONF\"}" 2>/dev/null | grep -q '"running":[[:space:]]*true'
+}
+
 setup_network() {
 	local tproxy_port fwmark self_mark rtable
 
@@ -140,45 +148,36 @@ start_service() {
 
 	log_step "=== [5/6] Memeriksa apakah proses berjalan ==="
 
-	# polling sampai 15 detik, TAPI langsung berhenti begitu kedeteksi
-	# hidup (biasanya cuma 1-2 detik) -- tidak lagi pakai window waktu
-	# tetap yang gampang kepotong kalau prosesnya butuh waktu agak lama
-	# buat settle (mis. lagi loading geoip/rule besar).
-	local i=0 up=0 max_wait=15
-	while [ "$i" -lt "$max_wait" ]; do
-		sleep 1
-		i=$((i + 1))
+	# cek status LANGSUNG ke procd (bukan nunggu lama nebak-nebak pakai
+	# pgrep) -- cukup jeda sangat singkat buat procd mendaftarkan instance.
+	sleep 1
 
-		# PENTING: pola dipersempit ke format asli fatal-log sing-box
-		# ("FATAL[0000] ...", uppercase, diikuti kurung siku). Pola lama
-		# ('fatal|panic:' case-insensitive) kebablasan -- sing-box punya
-		# banyak goroutine per-koneksi yang di-recover(), jadi 1 request
-		# gagal wajar pun bisa ikut ke-log dengan kata "panic:" padahal
-		# core-nya sendiri baik-baik saja.
-		if grep -qE 'FATAL\[' "$CORE_LOG" 2>/dev/null; then
-			up=0
-			log_step "Terdeteksi FATAL error pada output sing-box setelah ${i} detik (lihat Core Log)."
-			break
-		fi
+	local up=0
+	is_running && up=1
 
-		if pgrep -f "$bin_path run" >/dev/null 2>&1; then
-			up=1
-			log_step "Proses terdeteksi hidup setelah ${i} detik."
-			break
-		fi
-	done
+	# kalau ada FATAL error asli dari sing-box, core-nya dimatikan BENERAN
+	# di sini (procd tidak otomatis berhenti hanya gara-gara start_service
+	# ini return 1 -- instance yang sudah dibuka procd_open_instance tetap
+	# jalan terus kalau tidak diminta berhenti secara eksplisit).
+	if grep -qE 'FATAL\[' "$CORE_LOG" 2>/dev/null; then
+		log_step "Terdeteksi FATAL error pada output sing-box (lihat Core Log). Menghentikan core..."
+		up=0
+		ubus call service delete "{\"name\":\"$CONF\"}" >/dev/null 2>&1
+	fi
 
-	if [ "$up" != "1" ] && [ "$i" -ge "$max_wait" ]; then
-		log_step "Proses tidak kunjung terdeteksi hidup setelah ${max_wait} detik."
+	if [ "$up" = "1" ]; then
+		log_step "Proses terdeteksi hidup (dikonfirmasi lewat procd/ubus)."
+	else
+		log_step "Proses tidak terdeteksi hidup / sudah dihentikan karena error."
 	fi
 
 	if [ "$up" != "1" ]; then
-		log_step "GAGAL: sing-box tidak stabil berjalan (crash / restart-loop). Cek Core Log untuk detail error."
+		log_step "GAGAL: sing-box tidak berhasil berjalan. Cek Core Log untuk detail error."
 		log_step "=== [6/6] nftables TIDAK dipasang karena core gagal jalan ==="
 		return 1
 	fi
 
-	log_step "sing-box BERHASIL berjalan stabil, tidak ada error. PID $(pgrep -f "$bin_path run" | head -n1)"
+	log_step "sing-box BERHASIL berjalan, tidak ada error."
 
 	log_step "=== [6/6] Memasang nftables tproxy + ip rule/route ==="
 	if ! setup_network; then
@@ -208,13 +207,12 @@ service_triggers() {
 
 reload_service() {
 	config_load "$CONF"
-	local enabled bin_path
-	config_get enabled  config enabled  0
-	config_get bin_path config bin_path /usr/bin/sing-box
+	local enabled
+	config_get enabled config enabled 0
 
 	[ "$enabled" = "1" ] || return 0
 
-	if pgrep -f "$bin_path run" >/dev/null 2>&1; then
+	if is_running; then
 		log_step "Reload terdeteksi (kemungkinan firewall/fw4 reload) -> memasang ulang nftables tproxy."
 		setup_network
 	fi
