@@ -6,8 +6,10 @@ local util = require "luci.util"
 local http = require "luci.http"
 local uci  = require "luci.model.uci".cursor()
 
-local APP_LOG  = "/var/log/danbox-app.log"
-local CORE_LOG = "/var/log/danbox-core.log"
+local APP_LOG    = "/var/log/danbox-app.log"
+local CORE_LOG   = "/var/log/danbox-core.log"
+local UPDATE_LOG = "/var/log/danbox-update.log"
+local UPDATE_SCRIPT = "/usr/share/danbox/update-core.sh"
 
 function index()
 	if not fs.access("/etc/config/danbox") then
@@ -19,6 +21,7 @@ function index()
 	entry({"admin", "services", "danbox", "status"}, template("danbox/status"), _("App Config"), 1)
 	entry({"admin", "services", "danbox", "editor"}, template("danbox/editor"), _("Editor"), 2)
 	entry({"admin", "services", "danbox", "log"},    template("danbox/log"),    _("Log"),    3)
+	entry({"admin", "services", "danbox", "update"}, template("danbox/update"), _("Update Core"), 4)
 
 	entry({"admin", "services", "danbox", "ctl"},          call("action_ctl")).leaf = true
 	entry({"admin", "services", "danbox", "status_json"},  call("action_status_json")).leaf = true
@@ -30,6 +33,9 @@ function index()
 	entry({"admin", "services", "danbox", "file_delete"},  call("action_file_delete")).leaf = true
 	entry({"admin", "services", "danbox", "file_download"},call("action_file_download")).leaf = true
 	entry({"admin", "services", "danbox", "log_data"},     call("action_log_data")).leaf = true
+	entry({"admin", "services", "danbox", "core_installed"}, call("action_core_installed")).leaf = true
+	entry({"admin", "services", "danbox", "core_latest"},     call("action_core_latest")).leaf = true
+	entry({"admin", "services", "danbox", "core_update"},     call("action_core_update")).leaf = true
 end
 
 -- ---------------------------------------------------------------------
@@ -242,8 +248,44 @@ end
 
 function action_log_data()
 	local t = http.formvalue("type") or "app"
-	local path = (t == "core") and CORE_LOG or APP_LOG
+	local path = APP_LOG
+	if t == "core" then path = CORE_LOG
+	elseif t == "update" then path = UPDATE_LOG end
 	local out = sys.exec("tail -n 400 " .. util.shellquote(path) .. " 2>/dev/null") or ""
 	http.prepare_content("application/json")
 	http.write_json({ log = out, type = t })
+end
+
+-- ---------------------------------------------------------------------
+-- core update/download (from GitHub Releases, SagerNet/sing-box)
+-- ---------------------------------------------------------------------
+
+function action_core_installed()
+	local cfg = get_cfg()
+	local ver = nil
+	if fs.access(cfg.bin_path) then
+		local out = sys.exec("'" .. cfg.bin_path .. "' version 2>/dev/null | head -n1 | awk '{print $3}'") or ""
+		out = out:gsub("%s+$", "")
+		if out ~= "" then ver = out end
+	end
+	http.prepare_content("application/json")
+	http.write_json({ installed = ver })
+end
+
+function action_core_latest()
+	local api = sys.exec("wget -qO- https://api.github.com/repos/SagerNet/sing-box/releases/latest 2>/dev/null") or ""
+	local tag = api:match('"tag_name"%s*:%s*"([^"]+)"')
+
+	http.prepare_content("application/json")
+	if not tag then
+		http.write_json({ ok = false, msg = "Gagal mengambil data rilis dari GitHub (cek koneksi internet router)." })
+		return
+	end
+	http.write_json({ ok = true, latest = tag })
+end
+
+function action_core_update()
+	sys.call(UPDATE_SCRIPT .. " >/dev/null 2>&1 &")
+	http.prepare_content("application/json")
+	http.write_json({ ok = true })
 end
