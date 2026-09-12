@@ -1,6 +1,7 @@
 #!/bin/sh /etc/rc.common
-# Copyright (C) 2026 Higen (harimu63)
-# start/stop logic diadaptasi dari start-singbox.sh / stop-singbox.sh milik user
+# DanBox - sing-box service manager
+# Startup decision is based on sing-box check + startup Core Log.
+# RESTART restarts only the core and intentionally keeps nftables.
 
 START=99
 STOP=10
@@ -12,130 +13,123 @@ NFT_TABLE="danbox_tproxy"
 APP_LOG="/var/log/danbox-app.log"
 CORE_LOG="/var/log/danbox-core.log"
 
-# log_step -> khusus pesan tahapan service/init script (App Log)
 log_step() {
 	echo "$(date '+%Y-%m-%d %H:%M:%S') $1" >> "$APP_LOG"
 	logger -t danbox "$1"
 }
 
-# is_running -> tanya LANGSUNG ke procd lewat ubus, bukan tebak-tebakan
-# pattern-matching pgrep (terbukti tidak reliable di sistem ini, kemungkinan
-# karena procd/ujail mengubah cmdline yang terlihat oleh pgrep -f). Ini
-# sumber kebenaran yang sama persis dipakai `/etc/init.d/danbox status`.
 is_running() {
-	ubus call service list "{\"name\":\"$CONF\"}" 2>/dev/null | grep -q '"running":[[:space:]]*true'
+	ubus call service list "{\"name\":\"$CONF\"}" 2>/dev/null |
+		grep -q '"running":[[:space:]]*true'
+}
+
+core_has_error() {
+	grep -qiE 'FATAL|panic:|(^|[[:space:]])ERROR([[:space:]]|:|\[)' "$CORE_LOG" 2>/dev/null
+}
+
+get_network_config() {
+	config_get TPROXY_PORT config tproxy_port 9898
+	config_get FWMARK      config fwmark      0x1
+	config_get SELF_MARK   config self_mark   0xff
+	config_get RTABLE      config rtable      100
 }
 
 setup_network() {
-	local tproxy_port fwmark self_mark rtable
+	get_network_config
 
-	config_get tproxy_port config tproxy_port 9898
-	config_get fwmark      config fwmark      0x1
-	config_get self_mark   config self_mark   0xff
-	config_get rtable      config rtable      100
-
+	# Replace only DanBox's own nft/ip rules.
 	nft delete table inet "$NFT_TABLE" 2>/dev/null
-	ip rule del fwmark "$fwmark" lookup "$rtable" 2>/dev/null
-	ip route flush table "$rtable" 2>/dev/null
+	ip rule del fwmark "$FWMARK" lookup "$RTABLE" 2>/dev/null
+	ip route flush table "$RTABLE" 2>/dev/null
 
 	cat > "$NFT_FILE" << EOF
 table inet $NFT_TABLE {
 	chain prerouting {
 		type filter hook prerouting priority mangle; policy accept;
 		ip daddr { 127.0.0.0/8, 192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12 } accept
-		meta l4proto tcp meta mark set $fwmark tproxy ip to :$tproxy_port accept
-		meta l4proto udp meta mark set $fwmark tproxy ip to :$tproxy_port accept
+		meta l4proto tcp meta mark set $FWMARK tproxy ip to :$TPROXY_PORT accept
+		meta l4proto udp meta mark set $FWMARK tproxy ip to :$TPROXY_PORT accept
 	}
 
 	chain output {
 		type route hook output priority mangle; policy accept;
 		ip daddr { 127.0.0.0/8, 192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12 } accept
-		meta mark $self_mark accept
-		meta l4proto tcp meta mark set $fwmark
-		meta l4proto udp meta mark set $fwmark
+		meta mark $SELF_MARK accept
+		meta l4proto tcp meta mark set $FWMARK
+		meta l4proto udp meta mark set $FWMARK
 	}
 }
 EOF
 
 	if ! nft -f "$NFT_FILE" 2>>"$APP_LOG"; then
-		log_step "GAGAL memasang nftables rule dari $NFT_FILE"
+		log_step "GAGAL: nftables rule tidak dapat dipasang."
 		return 1
 	fi
 
-	ip rule add fwmark "$fwmark" lookup "$rtable" 2>>"$APP_LOG"
-	ip route add local 0.0.0.0/0 dev lo table "$rtable" 2>>"$APP_LOG"
+	if ! ip rule add fwmark "$FWMARK" lookup "$RTABLE" 2>>"$APP_LOG"; then
+		log_step "GAGAL: ip rule tidak dapat dipasang."
+		return 1
+	fi
 
-	log_step "nftables tproxy + ip rule/route terpasang (port=$tproxy_port fwmark=$fwmark table=$rtable)"
+	if ! ip route add local 0.0.0.0/0 dev lo table "$RTABLE" 2>>"$APP_LOG"; then
+		log_step "GAGAL: ip route table $RTABLE tidak dapat dipasang."
+		return 1
+	fi
+
+	log_step "nftables tproxy + ip rule/route terpasang (port=$TPROXY_PORT fwmark=$FWMARK table=$RTABLE)"
+	return 0
 }
 
 teardown_network() {
-	local fwmark rtable
-	config_get fwmark config fwmark 0x1
-	config_get rtable config rtable 100
+	get_network_config
 
-	nft delete table inet "$NFT_TABLE" 2>/dev/null && log_step "Table nftables $NFT_TABLE dihapus."
-	ip rule del fwmark "$fwmark" lookup "$rtable" 2>/dev/null && log_step "ip rule dihapus."
-	ip route flush table "$rtable" 2>/dev/null
+	nft delete table inet "$NFT_TABLE" 2>/dev/null &&
+		log_step "Table nftables $NFT_TABLE dihapus."
+
+	ip rule del fwmark "$FWMARK" lookup "$RTABLE" 2>/dev/null &&
+		log_step "ip rule dihapus."
+
+	ip route flush table "$RTABLE" 2>/dev/null
+	rm -f "$NFT_FILE"
 }
 
-start_service() {
-	local enabled bin_path config_dir config_file start_delay test_config
+stop_core_only() {
+	# Do NOT touch nftables here.
+	ubus call service delete "{\"name\":\"$CONF\"}" >/dev/null 2>&1
+}
 
-	config_load "$CONF"
-	config_get enabled     config enabled     0
-	config_get bin_path    config bin_path    /usr/bin/sing-box
-	config_get config_dir  config config_dir  /etc/sing-box
-	config_get config_file config config_file config.json
-	config_get start_delay config start_delay 0
-	config_get test_config config test_config 1
-
-	if [ "$enabled" != "1" ]; then
-		logger -t danbox "Service dalam kondisi disabled, start dibatalkan."
-		return 1
-	fi
-
-	# log baru cuma dibuat kalau memang benar-benar mau start -> App Log & Core Log
-	# dua-duanya langsung dikosongkan di sini (dipanggil pas Start ditekan)
-	: > "$APP_LOG"
-	: > "$CORE_LOG"
-
-	log_step "=== [1/6] Memvalidasi konfigurasi ==="
+validate_config() {
+	local bin_path="$1"
+	local cfg_path="$2"
+	local config_dir="$3"
 
 	if [ ! -x "$bin_path" ]; then
 		log_step "GAGAL: binary tidak ditemukan atau tidak executable ($bin_path)"
 		return 1
 	fi
 
-	local cfg_path="${config_dir}/${config_file}"
 	if [ ! -f "$cfg_path" ]; then
 		log_step "GAGAL: file config tidak ditemukan ($cfg_path)"
 		return 1
 	fi
-	log_step "Konfigurasi valid: $cfg_path"
 
-	[ "$start_delay" -gt 0 ] 2>/dev/null && {
-		log_step "Menunggu start delay ${start_delay}s..."
-		sleep "$start_delay"
-	}
+	log_step "Konfigurasi ditemukan: $cfg_path"
 
-	if [ "$test_config" = "1" ]; then
-		log_step "=== [2/6] Menguji konfigurasi (sing-box check) ==="
-		if ! "$bin_path" check -c "$cfg_path" -D "$config_dir" >>"$CORE_LOG" 2>&1; then
-			log_step "GAGAL: sing-box check menemukan error pada config. Cek Core Log untuk detail. Start dibatalkan, nftables tidak dipasang."
-			return 1
-		fi
-		log_step "Config lolos pengujian awal (sing-box check), tidak ada error."
+	if ! "$bin_path" check -c "$cfg_path" -D "$config_dir" >>"$CORE_LOG" 2>&1; then
+		log_step "GAGAL: sing-box check menemukan error pada config."
+		log_step "Core TIDAK dijalankan. nftables TIDAK dipasang."
+		return 1
 	fi
 
-	log_step "=== [3/6] Membersihkan sisa rule lama (jaga-jaga sebelum start) ==="
-	local fwmark rtable
-	config_get fwmark config fwmark 0x1
-	config_get rtable config rtable 100
-	nft delete table inet "$NFT_TABLE" 2>/dev/null
-	ip rule del fwmark "$fwmark" lookup "$rtable" 2>/dev/null
-	ip route flush table "$rtable" 2>/dev/null
+	log_step "Konfigurasi VALID: sing-box check berhasil."
+	return 0
+}
 
-	log_step "=== [4/6] Menjalankan proses sing-box (tanpa nftables dulu) ==="
+start_core() {
+	local bin_path="$1"
+	local cfg_path="$2"
+	local config_dir="$3"
+
 	log_step "Command: $bin_path run -c $cfg_path -D $config_dir"
 
 	procd_open_instance danbox
@@ -146,80 +140,193 @@ start_service() {
 	procd_set_param limits nofile="65535 65535"
 	procd_close_instance
 
-	log_step "=== [5/6] Memeriksa apakah proses berjalan ==="
+	# Tidak ada polling 8/15 detik.
+	# Sing-box hanya diberi sedikit waktu untuk menulis error startup.
+	sleep 1
 
-	# procd butuh sedikit waktu buat update status "running" secara
-	# internal setelah procd_close_instance -- retry singkat (bukan
-	# nunggu lama), berhenti begitu kedeteksi hidup.
-	local i=0 up=0
-	while [ "$i" -lt 8 ]; do
-		if is_running; then
-			up=1
-			break
-		fi
+	if core_has_error; then
+		log_step "ERROR: Core Log berisi FATAL/ERROR/panic."
+		log_step "Core akan dihentikan."
+		stop_core_only
 		sleep 1
-		i=$((i + 1))
-	done
-
-	# kalau ada FATAL error asli dari sing-box, core-nya dimatikan BENERAN
-	# di sini (procd tidak otomatis berhenti hanya gara-gara start_service
-	# ini return 1 -- instance yang sudah dibuka procd_open_instance tetap
-	# jalan terus kalau tidak diminta berhenti secara eksplisit).
-	if grep -qE 'FATAL\[' "$CORE_LOG" 2>/dev/null; then
-		log_step "Terdeteksi FATAL error pada output sing-box (lihat Core Log). Menghentikan core..."
-		up=0
-		ubus call service delete "{\"name\":\"$CONF\"}" >/dev/null 2>&1
+		log_step "Core dihentikan karena error."
+		return 1
 	fi
 
-	if [ "$up" = "1" ]; then
-		log_step "Proses terdeteksi hidup (dikonfirmasi lewat procd/ubus)."
+	# Procd/ubus hanya dipakai sebagai informasi tambahan.
+	# Jika tidak terdeteksi tetapi Core Log tidak berisi error, jangan
+	# menyimpulkan startup gagal seperti versi lama.
+	if is_running; then
+		log_step "Core sing-box terdeteksi berjalan."
 	else
-		log_step "Proses tidak terdeteksi hidup / sudah dihentikan karena error."
+		log_step "Core Log tidak menunjukkan FATAL/ERROR/panic; startup dianggap berhasil."
 	fi
 
-	if [ "$up" != "1" ]; then
-		log_step "GAGAL: sing-box tidak berhasil berjalan. Cek Core Log untuk detail error."
-		log_step "=== [6/6] nftables TIDAK dipasang karena core gagal jalan ==="
+	return 0
+}
+
+start_service() {
+	local enabled bin_path config_dir config_file start_delay test_config
+	local cfg_path
+
+	config_load "$CONF"
+	config_get enabled      config enabled      0
+	config_get bin_path     config bin_path     /usr/bin/sing-box
+	config_get config_dir   config config_dir   /etc/sing-box
+	config_get config_file  config config_file  config.json
+	config_get start_delay config start_delay  0
+	config_get test_config config test_config  1
+
+	if [ "$enabled" != "1" ]; then
+		logger -t danbox "Service disabled, start dibatalkan."
 		return 1
 	fi
 
-	log_step "sing-box BERHASIL berjalan, tidak ada error."
+	: > "$APP_LOG"
+	: > "$CORE_LOG"
 
-	log_step "=== [6/6] Memasang nftables tproxy + ip rule/route ==="
+	cfg_path="${config_dir}/${config_file}"
+
+	log_step "=== [1/4] Memvalidasi konfigurasi ==="
+
+	if [ "$start_delay" -gt 0 ] 2>/dev/null; then
+		log_step "Menunggu start delay ${start_delay}s..."
+		sleep "$start_delay"
+	fi
+
+	if [ "$test_config" = "1" ]; then
+		if ! validate_config "$bin_path" "$cfg_path" "$config_dir"; then
+			return 1
+		fi
+	else
+		if [ ! -x "$bin_path" ]; then
+			log_step "GAGAL: binary tidak ditemukan atau tidak executable ($bin_path)"
+			return 1
+		fi
+		if [ ! -f "$cfg_path" ]; then
+			log_step "GAGAL: file config tidak ditemukan ($cfg_path)"
+			return 1
+		fi
+		log_step "Test config dinonaktifkan."
+	fi
+
+	log_step "=== [2/4] Membersihkan rule DanBox lama ==="
+	get_network_config
+	nft delete table inet "$NFT_TABLE" 2>/dev/null
+	ip rule del fwmark "$FWMARK" lookup "$RTABLE" 2>/dev/null
+	ip route flush table "$RTABLE" 2>/dev/null
+	rm -f "$NFT_FILE"
+
+	log_step "=== [3/4] Menjalankan core sing-box ==="
+
+	if ! start_core "$bin_path" "$cfg_path" "$config_dir"; then
+		log_step "START GAGAL: core dihentikan karena error."
+		log_step "=== [4/4] nftables TIDAK dipasang ==="
+		return 1
+	fi
+
+	log_step "=== [4/4] Memasang nftables tproxy + ip rule/route ==="
+
 	if ! setup_network; then
-		log_step "GAGAL memasang jaringan walau core sudah jalan. Trafik belum dialihkan."
+		log_step "GAGAL: core hidup tetapi nftables gagal dipasang."
 		return 1
 	fi
 
-	log_step "Semua tahap SELESAI. sing-box aktif dan trafik sudah dialihkan lewat tproxy."
-	log_step "Buka Dashboard lewat tombol OPEN DASHBOARD di App Config."
+	log_step "START SELESAI: core aktif + nftables aktif."
 }
 
 stop_service() {
 	config_load "$CONF"
-	log_step "=== Menghentikan sing-box ==="
+
+	log_step "=== STOP ==="
+
+	stop_core_only
+	sleep 1
+	log_step "Core sing-box dihentikan."
+
 	teardown_network
-	log_step "Selesai. Sistem sudah bersih dari sing-box."
+
+	log_step "STOP SELESAI: core dan nftables dihentikan."
+}
+
+restart_service() {
+	local enabled bin_path config_dir config_file test_config
+	local cfg_path
+
+	config_load "$CONF"
+	config_get enabled     config enabled     0
+	config_get bin_path    config bin_path    /usr/bin/sing-box
+	config_get config_dir  config config_dir  /etc/sing-box
+	config_get config_file config config_file config.json
+	config_get test_config config test_config 1
+
+	if [ "$enabled" != "1" ]; then
+		log_step "Service disabled. Restart dibatalkan."
+		return 1
+	fi
+
+	cfg_path="${config_dir}/${config_file}"
+
+	log_step "=== RESTART CORE SAJA ==="
+
+	# Validate BEFORE stopping a currently healthy core.
+	if [ "$test_config" = "1" ]; then
+		if [ ! -x "$bin_path" ]; then
+			log_step "GAGAL: binary tidak ditemukan atau tidak executable ($bin_path)"
+			log_step "Core lama TETAP berjalan. nftables TETAP dipertahankan."
+			return 1
+		fi
+
+		if [ ! -f "$cfg_path" ]; then
+			log_step "GAGAL: config tidak ditemukan ($cfg_path)"
+			log_step "Core lama TETAP berjalan. nftables TETAP dipertahankan."
+			return 1
+		fi
+
+		if ! "$bin_path" check -c "$cfg_path" -D "$config_dir" >"$CORE_LOG" 2>&1; then
+			log_step "GAGAL: konfigurasi baru tidak valid."
+			log_step "Core lama TIDAK disentuh. nftables TETAP dipertahankan."
+			return 1
+		fi
+
+		log_step "Konfigurasi baru VALID."
+	fi
+
+	log_step "Menghentikan core lama TANPA menghapus nftables."
+	stop_core_only
+	sleep 1
+
+	: > "$CORE_LOG"
+
+	log_step "Menjalankan core baru."
+
+	if ! start_core "$bin_path" "$cfg_path" "$config_dir"; then
+		log_step "RESTART GAGAL: core baru menghasilkan error dan sudah dihentikan."
+		log_step "nftables TIDAK disentuh."
+		return 1
+	fi
+
+	log_step "RESTART SELESAI: core baru aktif."
+	log_step "nftables TETAP dipertahankan."
 }
 
 service_triggers() {
 	procd_add_reload_trigger "$CONF"
-	# fw4 kadang nge-reload SELURUH ruleset nftables (mis. saat WAN baru
-	# kedetect pas boot) dan itu ikut menghapus table custom kita.
-	# Dengan trigger ini, tiap firewall reload -> reload_service() kepanggil
-	# otomatis buat masang ulang nftables tproxy kalau core masih hidup.
 	procd_add_reload_trigger "firewall"
 }
 
 reload_service() {
-	config_load "$CONF"
 	local enabled
+
+	config_load "$CONF"
 	config_get enabled config enabled 0
 
 	[ "$enabled" = "1" ] || return 0
 
 	if is_running; then
-		log_step "Reload terdeteksi (kemungkinan firewall/fw4 reload) -> memasang ulang nftables tproxy."
+		log_step "Firewall reload terdeteksi -> memasang ulang nftables tproxy."
 		setup_network
+	else
+		log_step "Firewall reload terdeteksi tetapi core tidak terdeteksi running; nftables tidak dipasang."
 	fi
 }

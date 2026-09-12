@@ -21,60 +21,54 @@
 			</td>
 		</tr>
 	</table>
-	<div class="cbi-map-descr" style="margin-top:6px">Nyala/matikan service diatur lewat <b>Enable</b> di App Config, lalu <b>Save &amp; Apply</b>.</div>
+	<div class="cbi-map-descr" style="margin-top:6px">
+		Nyala/matikan service diatur lewat <b>Enable</b> di App Config, lalu <b>Save &amp; Apply</b>.
+	</div>
 </div>
 
 <div class="cbi-section">
 	<h3>App Config</h3>
 	<table class="table" style="max-width:700px">
+		<tr class="tr"><td class="td left" style="width:180px"><label>Enable</label></td>
+			<td class="td left"><input type="checkbox" id="db_enabled"></td></tr>
+
+		<tr class="tr"><td class="td left"><label>Binary Path</label></td>
+			<td class="td left"><input type="text" id="db_bin_path" class="cbi-input-text" style="width:100%"></td></tr>
+
+		<tr class="tr"><td class="td left"><label>Config Directory</label></td>
+			<td class="td left"><input type="text" id="db_config_dir" class="cbi-input-text" style="width:100%"></td></tr>
+
+		<tr class="tr"><td class="td left"><label>Config File</label></td>
+			<td class="td left"><input type="text" id="db_config_file" class="cbi-input-text" style="width:100%"></td></tr>
+
+		<tr class="tr"><td class="td left"><label>Start Delay (s)</label></td>
+			<td class="td left"><input type="number" id="db_start_delay" class="cbi-input-text" style="width:100px"></td></tr>
+
+		<tr class="tr"><td class="td left"><label>Test Config Before Start</label></td>
+			<td class="td left"><input type="checkbox" id="db_test_config"></td></tr>
+
 		<tr class="tr">
-			<td class="td left" style="width:180px"><label>Enable</label></td>
-			<td class="td left"><input type="checkbox" id="db_enabled"></td>
+			<td class="td left" colspan="2">
+				<h4 style="margin-bottom:4px">Transparent Proxy (nftables tproxy)</h4>
+			</td>
 		</tr>
-		<tr class="tr">
-			<td class="td left"><label>Binary Path</label></td>
-			<td class="td left"><input type="text" id="db_bin_path" class="cbi-input-text" style="width:100%"></td>
-		</tr>
-		<tr class="tr">
-			<td class="td left"><label>Config Directory</label></td>
-			<td class="td left"><input type="text" id="db_config_dir" class="cbi-input-text" style="width:100%"></td>
-		</tr>
-		<tr class="tr">
-			<td class="td left"><label>Config File</label></td>
-			<td class="td left"><input type="text" id="db_config_file" class="cbi-input-text" style="width:100%"></td>
-		</tr>
-		<tr class="tr">
-			<td class="td left"><label>Start Delay (s)</label></td>
-			<td class="td left"><input type="number" id="db_start_delay" class="cbi-input-text" style="width:100px"></td>
-		</tr>
-		<tr class="tr">
-			<td class="td left"><label>Test Config Before Start</label></td>
-			<td class="td left"><input type="checkbox" id="db_test_config"></td>
-		</tr>
-		<tr class="tr">
-			<td class="td left" colspan="2"><h4 style="margin-bottom:4px">Transparent Proxy (nftables tproxy)</h4></td>
-		</tr>
-		<tr class="tr">
-			<td class="td left"><label>TPROXY Port</label></td>
-			<td class="td left"><input type="text" id="db_tproxy_port" class="cbi-input-text" style="width:150px"></td>
-		</tr>
-		<tr class="tr">
-			<td class="td left"><label>fwmark</label></td>
-			<td class="td left"><input type="text" id="db_fwmark" class="cbi-input-text" style="width:150px"></td>
-		</tr>
-		<tr class="tr">
-			<td class="td left"><label>self_mark (default_mark di config sing-box)</label></td>
-			<td class="td left"><input type="text" id="db_self_mark" class="cbi-input-text" style="width:150px"></td>
-		</tr>
-		<tr class="tr">
-			<td class="td left"><label>Routing Table</label></td>
-			<td class="td left"><input type="text" id="db_rtable" class="cbi-input-text" style="width:150px"></td>
-		</tr>
-		<tr class="tr">
-			<td class="td left"><label>Dashboard Port (clash_api)</label></td>
-			<td class="td left"><input type="text" id="db_dashboard_port" class="cbi-input-text" style="width:150px"></td>
-		</tr>
+
+		<tr class="tr"><td class="td left"><label>TPROXY Port</label></td>
+			<td class="td left"><input type="text" id="db_tproxy_port" class="cbi-input-text" style="width:150px"></td></tr>
+
+		<tr class="tr"><td class="td left"><label>fwmark</label></td>
+			<td class="td left"><input type="text" id="db_fwmark" class="cbi-input-text" style="width:150px"></td></tr>
+
+		<tr class="tr"><td class="td left"><label>self_mark (default_mark di config sing-box)</label></td>
+			<td class="td left"><input type="text" id="db_self_mark" class="cbi-input-text" style="width:150px"></td></tr>
+
+		<tr class="tr"><td class="td left"><label>Routing Table</label></td>
+			<td class="td left"><input type="text" id="db_rtable" class="cbi-input-text" style="width:150px"></td></tr>
+
+		<tr class="tr"><td class="td left"><label>Dashboard Port (clash_api)</label></td>
+			<td class="td left"><input type="text" id="db_dashboard_port" class="cbi-input-text" style="width:150px"></td></tr>
 	</table>
+
 	<div class="cbi-page-actions">
 		<button class="cbi-button cbi-button-save" onclick="dbSaveConfig()">Save &amp; Apply</button>
 		<span id="db_apply_info" style="margin-left:12px; font-weight:bold"></span>
@@ -83,7 +77,9 @@
 
 <div class="cbi-section">
 	<h3>Log (App)</h3>
-	<div class="cbi-map-descr" style="margin-top:-6px">Log tahapan service. Kalau service gagal menyala, cek <b>Core Log</b> di tab Log untuk detail error dari sing-box sendiri. Langsung terhapus &amp; terisi baru setiap kali Start.</div>
+	<div class="cbi-map-descr" style="margin-top:-6px">
+		Log tahapan service. Core Log dan App Log diperbarui otomatis di tab Log.
+	</div>
 	<div style="margin-bottom:8px">
 		<button class="cbi-button" onclick="dbLoadHomeLog()">Refresh Log</button>
 	</div>
@@ -98,54 +94,120 @@
 		cfgSave: '<%=luci.dispatcher.build_url("admin/services/danbox/config_save")%>',
 		logData: '<%=luci.dispatcher.build_url("admin/services/danbox/log_data")%>'
 	};
+
 	var dbDashboardPort = '9090';
-	var dbBurstTimer = null;
+	var dbStatusTimer = null;
+	var dbHomeLogTimer = null;
 
 	function dbRefreshStatus(cb) {
-		fetch(dbUrl.status).then(r => r.json()).then(function(d) {
+		fetch(dbUrl.status, {cache:'no-store'})
+		.then(function(r) { return r.json(); })
+		.then(function(d) {
 			document.getElementById('db_version').textContent = d.version || 'unknown';
+
 			var el = document.getElementById('db_status');
 			el.textContent = d.running ? 'Running' : 'Not Running';
 			el.style.color = d.running ? '#2d862d' : '#c0392b';
 			el.style.fontWeight = 'bold';
+
 			if (cb) cb(d.running);
+		})
+		.catch(function() {
+			var el = document.getElementById('db_status');
+			el.textContent = 'Status Error';
+			el.style.color = '#ff7b72';
 		});
 	}
 
-	// refresh log tiap 1.5 detik selama ~12 detik setelah start/stop/restart,
-	// lalu berhenti sendiri -- bukan auto-refresh permanen.
-	function dbBurstRefresh() {
-		if (dbBurstTimer) { clearInterval(dbBurstTimer); dbBurstTimer = null; }
-		var ticks = 0;
-		dbBurstTimer = setInterval(function() {
-			dbLoadHomeLog();
+	function dbStartStatusRefresh() {
+		if (dbStatusTimer) clearInterval(dbStatusTimer);
+		if (dbHomeLogTimer) clearInterval(dbHomeLogTimer);
+
+		dbStatusTimer = setInterval(function() {
 			dbRefreshStatus();
-			ticks++;
-			if (ticks >= 8) { clearInterval(dbBurstTimer); dbBurstTimer = null; }
-		}, 1500);
+		}, 3000);
+
+		dbHomeLogTimer = setInterval(function() {
+			dbLoadHomeLog();
+		}, 1000);
 	}
 
 	function dbClearHomeLogView(msg) {
-		document.getElementById('db_home_log').innerHTML = '<div style="color:#888">' + msg + '</div>';
+		document.getElementById('db_home_log').innerHTML =
+			'<div style="color:#888">' + msg + '</div>';
+	}
+
+	function dbWaitAfterControl(action, info) {
+		var attempts = 0;
+		var maxAttempts = 5;
+
+		var timer = setInterval(function() {
+			attempts++;
+
+			dbRefreshStatus(function(running) {
+				if (action === 'stop') {
+					if (!running) {
+						clearInterval(timer);
+						info.style.color = '#3fb950';
+						info.textContent = 'Service berhasil dimatikan.';
+					}
+					return;
+				}
+
+				/*
+				 * Tidak ada lagi setTimeout 5/15 detik sebagai penentu error.
+				 * Core Log adalah sumber informasi startup. Status Running
+				 * hanya dipakai untuk memperbarui UI jika procd sudah sempat
+				 * melaporkan proses.
+				 */
+				if (running) {
+					clearInterval(timer);
+					info.style.color = '#3fb950';
+					info.textContent = 'Core berjalan normal.';
+				}
+			});
+
+			if (attempts >= maxAttempts) {
+				clearInterval(timer);
+
+				if (action !== 'stop') {
+					info.style.color = '#58a6ff';
+					info.textContent = 'Perintah selesai. Jika status belum Running, cek Core Log.';
+				}
+			}
+		}, 1000);
 	}
 
 	function dbCtl(action) {
 		var info = document.getElementById('db_apply_info');
+
 		info.style.color = '#58a6ff';
-		info.textContent = action === 'stop' ? 'Mematikan service...' : 'Menjalankan service...';
+		info.textContent = action === 'stop'
+			? 'Mematikan service...'
+			: (action === 'restart' ? 'Restart core...' : 'Reload...');
+
 		if (action !== 'stop') {
-			dbClearHomeLogView('(memulai ulang, menunggu log baru...)');
+			dbClearHomeLogView('(menjalankan perintah, log diperbarui otomatis...)');
 		}
+
 		var body = new FormData();
 		body.append('action', action);
-		fetch(dbUrl.ctl, { method: 'POST', body: body }).then(function() {
-			dbBurstRefresh();
-			setTimeout(function() {
-				dbRefreshStatus(function(running) {
-					info.style.color = running ? '#3fb950' : (action === 'stop' ? '#3fb950' : '#ff7b72');
-					info.textContent = running ? 'Service menyala.' : (action === 'stop' ? 'Service dimatikan.' : 'Gagal menyala, cek Core Log.');
-				});
-			}, 5000);
+
+		fetch(dbUrl.ctl, {method:'POST', body:body})
+		.then(function(r) { return r.json(); })
+		.then(function(d) {
+			if (!d.ok) {
+				info.style.color = '#ff7b72';
+				info.textContent = 'Perintah gagal dijalankan.';
+				return;
+			}
+
+			dbLoadHomeLog();
+			dbWaitAfterControl(action, info);
+		})
+		.catch(function() {
+			info.style.color = '#ff7b72';
+			info.textContent = 'Tidak dapat menghubungi service controller.';
 		});
 	}
 
@@ -155,7 +217,9 @@
 	}
 
 	function dbLoadConfig() {
-		fetch(dbUrl.cfgGet).then(r => r.json()).then(function(d) {
+		fetch(dbUrl.cfgGet, {cache:'no-store'})
+		.then(function(r) { return r.json(); })
+		.then(function(d) {
 			document.getElementById('db_enabled').checked = (d.enabled === '1');
 			document.getElementById('db_bin_path').value = d.bin_path;
 			document.getElementById('db_config_dir').value = d.config_dir;
@@ -174,6 +238,7 @@
 	function dbSaveConfig() {
 		var enabled = document.getElementById('db_enabled').checked;
 		var info = document.getElementById('db_apply_info');
+
 		info.style.color = '#58a6ff';
 		info.textContent = 'Menyimpan konfigurasi...';
 
@@ -190,61 +255,89 @@
 		body.append('rtable', document.getElementById('db_rtable').value);
 		body.append('dashboard_port', document.getElementById('db_dashboard_port').value);
 
-		fetch(dbUrl.cfgSave, { method: 'POST', body: body }).then(r => r.json()).then(function(d) {
-			if (!d.ok) { info.style.color = '#ff7b72'; info.textContent = 'Gagal menyimpan config.'; return; }
-			dbDashboardPort = document.getElementById('db_dashboard_port').value || '9090';
+		fetch(dbUrl.cfgSave, {method:'POST', body:body})
+		.then(function(r) { return r.json(); })
+		.then(function(d) {
+			if (!d.ok) {
+				info.style.color = '#ff7b72';
+				info.textContent = 'Gagal menyimpan config.';
+				return;
+			}
+
+			dbDashboardPort =
+				document.getElementById('db_dashboard_port').value || '9090';
 
 			info.style.color = '#58a6ff';
-			info.textContent = 'Konfigurasi tersimpan. ' + (enabled ? 'Menyalakan service...' : 'Mematikan service...');
+			info.textContent = 'Konfigurasi tersimpan. ' +
+				(enabled ? 'Menjalankan core...' : 'Mematikan service...');
+
 			if (enabled) {
-				dbClearHomeLogView('(memulai ulang, menunggu log baru...)');
+				dbClearHomeLogView('(menjalankan core, log diperbarui otomatis...)');
 			}
 
 			var ctlBody = new FormData();
 			ctlBody.append('action', enabled ? 'restart' : 'stop');
-			fetch(dbUrl.ctl, { method: 'POST', body: ctlBody }).then(function() {
-				dbBurstRefresh();
-				setTimeout(function() {
-					dbRefreshStatus(function(running) {
-						if (enabled) {
-							info.style.color = running ? '#3fb950' : '#ff7b72';
-							info.textContent = running ? 'Service berhasil menyala.' : 'Gagal menyala, cek Core Log untuk detail error.';
-						} else {
-							info.style.color = '#3fb950';
-							info.textContent = 'Service berhasil dimatikan.';
-						}
-					});
-				}, 5000);
+
+			fetch(dbUrl.ctl, {method:'POST', body:ctlBody})
+			.then(function(r) { return r.json(); })
+			.then(function(result) {
+				if (!result.ok) {
+					info.style.color = '#ff7b72';
+					info.textContent = 'Perintah service gagal dijalankan.';
+					return;
+				}
+
+				dbLoadHomeLog();
+				dbWaitAfterControl(enabled ? 'restart' : 'stop', info);
 			});
 		});
 	}
 
 	function dbEscapeHtml(s) {
-		return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+		return String(s)
+			.replace(/&/g,'&amp;')
+			.replace(/</g,'&lt;')
+			.replace(/>/g,'&gt;');
 	}
-	// buang kode warna ANSI mentah (mis. dari output sing-box: ESC[31mFATAL...ESC[0m)
+
 	function dbStripAnsi(s) {
-		return s.replace(/\x1b\[[0-9;]*m/g, '');
+		return String(s).replace(/\x1b\[[0-9;]*m/g, '');
 	}
 
 	function dbClassifyLine(line) {
-		if (/fatal|gagal|error/i.test(line)) return 'color:#ff7b72';
-		if (/berhasil|selesai|valid|lolos|terpasang/i.test(line)) return 'color:#3fb950';
-		if (/^\d{4}-\d\d-\d\d .*=== /.test(line)) return 'color:#58a6ff;font-weight:bold';
+		if (/fatal|gagal|error/i.test(line))
+			return 'color:#ff7b72;font-weight:bold';
+
+		if (/berhasil|selesai|valid|lolos|terpasang|berjalan normal/i.test(line))
+			return 'color:#3fb950';
+
+		if (/^\d{4}-\d\d-\d\d .*=== /.test(line))
+			return 'color:#58a6ff;font-weight:bold';
+
 		return 'color:#c9d1d9';
 	}
 
 	function dbLoadHomeLog() {
-		fetch(dbUrl.logData + '?type=app').then(r => r.json()).then(function(d) {
+		fetch(dbUrl.logData + '?type=app', {cache:'no-store'})
+		.then(function(r) { return r.json(); })
+		.then(function(d) {
 			var box = document.getElementById('db_home_log');
-			var lines = (d.log || '').split('\n').map(dbStripAnsi).filter(function(l) { return l.length > 0; });
+
+			var lines = (d.log || '')
+				.split('\n')
+				.map(dbStripAnsi)
+				.filter(function(l) { return l.length > 0; });
+
 			if (!lines.length) {
 				box.innerHTML = '<div style="color:#888">(log kosong)</div>';
 				return;
 			}
+
 			box.innerHTML = lines.map(function(line) {
-				return '<div style="' + dbClassifyLine(line) + '">' + dbEscapeHtml(line) + '</div>';
+				return '<div style="' + dbClassifyLine(line) + '">' +
+					dbEscapeHtml(line) + '</div>';
 			}).join('');
+
 			box.scrollTop = box.scrollHeight;
 		});
 	}
@@ -252,7 +345,12 @@
 	dbRefreshStatus();
 	dbLoadConfig();
 	dbLoadHomeLog();
-	setInterval(dbRefreshStatus, 3000);
+	dbStartStatusRefresh();
+
+	window.addEventListener('beforeunload', function() {
+		if (dbStatusTimer) clearInterval(dbStatusTimer);
+		if (dbHomeLogTimer) clearInterval(dbHomeLogTimer);
+	});
 </script>
 
 <%+footer%>
