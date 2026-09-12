@@ -138,25 +138,29 @@ start_service() {
 	procd_set_param limits nofile="65535 65535"
 	procd_close_instance
 
-	log_step "=== [5/6] Memeriksa apakah proses stabil berjalan (bukan crash-loop) ==="
+	log_step "=== [5/6] Memeriksa apakah proses berjalan ==="
 
-	# harus hidup TERUS-MENERUS beberapa detik berturut-turut (bukan cuma
-	# sekilas kedeteksi di antara siklus crash->respawn->crash lagi)
-	local i=0 up=1
-	while [ "$i" -lt 5 ]; do
-		sleep 1
-		if ! pgrep -f "$bin_path run" >/dev/null 2>&1; then
-			up=0
-			break
-		fi
-		i=$((i + 1))
-	done
+	# beri waktu settle -- terutama pas boot / beban sistem lagi tinggi,
+	# pgrep sesekali bisa "meleset" walau prosesnya sebenarnya sehat.
+	sleep 3
+	local up=0
+	pgrep -f "$bin_path run" >/dev/null 2>&1 && up=1
 
-	# safety net tambahan: walau proses masih kedetect "hidup", kalau ada
-	# baris FATAL/panic di core log, tetap anggap gagal (crash-loop cepat)
+	# safety net: kalau ada FATAL/panic di core log, override jadi gagal
+	# walau pgrep sempat positif (baru sempat nyala tapi langsung crash)
 	if grep -qiE 'fatal|panic:' "$CORE_LOG" 2>/dev/null; then
 		up=0
 		log_step "Terdeteksi error FATAL pada output sing-box (lihat Core Log)."
+	fi
+
+	# belum kedeteksi hidup? kasih 1 kesempatan tambahan (bisa jadi masih
+	# proses loading berat saat boot), bukan langsung divonis gagal
+	if [ "$up" != "1" ]; then
+		sleep 2
+		if pgrep -f "$bin_path run" >/dev/null 2>&1 && ! grep -qiE 'fatal|panic:' "$CORE_LOG" 2>/dev/null; then
+			up=1
+			log_step "Proses baru kedeteksi hidup setelah tambahan waktu tunggu (kemungkinan beban sistem lagi tinggi)."
+		fi
 	fi
 
 	if [ "$up" != "1" ]; then
@@ -186,4 +190,23 @@ stop_service() {
 
 service_triggers() {
 	procd_add_reload_trigger "$CONF"
+	# fw4 kadang nge-reload SELURUH ruleset nftables (mis. saat WAN baru
+	# kedetect pas boot) dan itu ikut menghapus table custom kita.
+	# Dengan trigger ini, tiap firewall reload -> reload_service() kepanggil
+	# otomatis buat masang ulang nftables tproxy kalau core masih hidup.
+	procd_add_reload_trigger "firewall"
+}
+
+reload_service() {
+	config_load "$CONF"
+	local enabled bin_path
+	config_get enabled  config enabled  0
+	config_get bin_path config bin_path /usr/bin/sing-box
+
+	[ "$enabled" = "1" ] || return 0
+
+	if pgrep -f "$bin_path run" >/dev/null 2>&1; then
+		log_step "Reload terdeteksi (kemungkinan firewall/fw4 reload) -> memasang ulang nftables tproxy."
+		setup_network
+	fi
 }
