@@ -82,8 +82,8 @@
 </div>
 
 <div class="cbi-section">
-	<h3>Log</h3>
-	<div class="cbi-map-descr" style="margin-top:-6px">Direset hanya saat service benar-benar di-start. Auto-refresh singkat aktif otomatis setiap Save &amp; Apply / Restart / Reload (berhenti sendiri setelah ~12 detik) — tidak auto-refresh terus-menerus.</div>
+	<h3>Log (App)</h3>
+	<div class="cbi-map-descr" style="margin-top:-6px">Log tahapan service. Kalau service gagal menyala, cek <b>Core Log</b> di tab Log untuk detail error dari sing-box sendiri. Langsung terhapus &amp; terisi baru setiap kali Start.</div>
 	<div style="margin-bottom:8px">
 		<button class="cbi-button" onclick="dbLoadHomeLog()">Refresh Log</button>
 	</div>
@@ -125,10 +125,17 @@
 		}, 1500);
 	}
 
+	function dbClearHomeLogView(msg) {
+		document.getElementById('db_home_log').innerHTML = '<div style="color:#888">' + msg + '</div>';
+	}
+
 	function dbCtl(action) {
 		var info = document.getElementById('db_apply_info');
 		info.style.color = '#58a6ff';
 		info.textContent = action === 'stop' ? 'Mematikan service...' : 'Menjalankan service...';
+		if (action !== 'stop') {
+			dbClearHomeLogView('(memulai ulang, menunggu log baru...)');
+		}
 		var body = new FormData();
 		body.append('action', action);
 		fetch(dbUrl.ctl, { method: 'POST', body: body }).then(function() {
@@ -136,7 +143,7 @@
 			setTimeout(function() {
 				dbRefreshStatus(function(running) {
 					info.style.color = running ? '#3fb950' : (action === 'stop' ? '#3fb950' : '#ff7b72');
-					info.textContent = running ? 'Service menyala.' : (action === 'stop' ? 'Service dimatikan.' : 'Gagal menyala, cek Log.');
+					info.textContent = running ? 'Service menyala.' : (action === 'stop' ? 'Service dimatikan.' : 'Gagal menyala, cek Core Log.');
 				});
 			}, 5000);
 		});
@@ -189,6 +196,9 @@
 
 			info.style.color = '#58a6ff';
 			info.textContent = 'Konfigurasi tersimpan. ' + (enabled ? 'Menyalakan service...' : 'Mematikan service...');
+			if (enabled) {
+				dbClearHomeLogView('(memulai ulang, menunggu log baru...)');
+			}
 
 			var ctlBody = new FormData();
 			ctlBody.append('action', enabled ? 'restart' : 'stop');
@@ -198,7 +208,7 @@
 					dbRefreshStatus(function(running) {
 						if (enabled) {
 							info.style.color = running ? '#3fb950' : '#ff7b72';
-							info.textContent = running ? 'Service berhasil menyala.' : 'Gagal menyala, cek Log untuk detail error.';
+							info.textContent = running ? 'Service berhasil menyala.' : 'Gagal menyala, cek Core Log untuk detail error.';
 						} else {
 							info.style.color = '#3fb950';
 							info.textContent = 'Service berhasil dimatikan.';
@@ -225,7 +235,7 @@
 	}
 
 	function dbLoadHomeLog() {
-		fetch(dbUrl.logData).then(r => r.json()).then(function(d) {
+		fetch(dbUrl.logData + '?type=app').then(r => r.json()).then(function(d) {
 			var box = document.getElementById('db_home_log');
 			var lines = (d.log || '').split('\n').map(dbStripAnsi).filter(function(l) { return l.length > 0; });
 			if (!lines.length) {
