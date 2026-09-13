@@ -11,7 +11,7 @@ LUCI_DESCRIPTION:=Run, monitor, edit config, and view logs for SagerNet/sing-box
 LUCI_PKGARCH:=all
 
 PKG_NAME:=luci-app-danbox
-PKG_VERSION:=1.0.0
+PKG_VERSION:=1.2.0
 PKG_RELEASE:=1
 
 PKG_LICENSE:=GPL-3.0-only
