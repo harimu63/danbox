@@ -129,23 +129,58 @@ start_core() {
 	local bin_path="$1"
 	local cfg_path="$2"
 	local config_dir="$3"
+	local elapsed pid
 
 	log_step "Command: $bin_path run -c $cfg_path -D $config_dir"
 
+	# Start through procd so normal service supervision is retained.
+	# Respawn is intentionally enabled only after startup is proven healthy.
 	procd_open_instance danbox
 	procd_set_param command /bin/sh -c "exec '$bin_path' run -c '$cfg_path' -D '$config_dir' >>'$CORE_LOG' 2>&1"
-	procd_set_param respawn 3600 5 5
 	procd_set_param term_timeout 10
 	procd_set_param file "$cfg_path"
 	procd_set_param limits nofile="65535 65535"
 	procd_close_instance
 
-	# Tidak ada polling 8/15 detik.
-	# Sing-box hanya diberi sedikit waktu untuk menulis error startup.
-	sleep 1
+	# Observe startup frequently instead of using the old 15-second delay.
+	# A fatal runtime error is checked BEFORE declaring startup successful.
+	# The 3-second window is only a safety guard for an unusually slow process;
+	# reaching it is NOT itself considered an error.
+	elapsed=0
+	while [ "$elapsed" -lt 3000 ]; do
+		if core_has_error; then
+			log_step "ERROR: ditemukan FATAL/ERROR/panic pada Core Log."
+			log_step "Core akan dihentikan."
+			stop_core_only
+			sleep 1
+			log_step "Core dihentikan karena error."
+			return 1
+		fi
 
+		pid="$(pidof sing-box 2>/dev/null | awk '{print $1}')"
+		if [ -n "$pid" ]; then
+			# Catch errors emitted immediately after the process appears.
+			sleep 0.2
+			if core_has_error; then
+				log_step "ERROR: ditemukan FATAL/ERROR/panic pada Core Log."
+				log_step "Core akan dihentikan."
+				stop_core_only
+				sleep 1
+				log_step "Core dihentikan karena error."
+				return 1
+			fi
+
+			log_step "Core sing-box terdeteksi berjalan tanpa error startup."
+			return 0
+		fi
+
+		sleep 0.2
+		elapsed=$((elapsed + 200))
+	done
+
+	# Final check: only an actual Core Log error causes failure.
 	if core_has_error; then
-		log_step "ERROR: Core Log berisi FATAL/ERROR/panic."
+		log_step "ERROR: ditemukan FATAL/ERROR/panic pada Core Log."
 		log_step "Core akan dihentikan."
 		stop_core_only
 		sleep 1
@@ -153,18 +188,9 @@ start_core() {
 		return 1
 	fi
 
-	# Procd/ubus hanya dipakai sebagai informasi tambahan.
-	# Jika tidak terdeteksi tetapi Core Log tidak berisi error, jangan
-	# menyimpulkan startup gagal seperti versi lama.
-	if is_running; then
-		log_step "Core sing-box terdeteksi berjalan."
-	else
-		log_step "Core Log tidak menunjukkan FATAL/ERROR/panic; startup dianggap berhasil."
-	fi
-
+	log_step "Core Log tidak menunjukkan FATAL/ERROR/panic; startup dianggap berhasil."
 	return 0
 }
-
 start_service() {
 	local enabled bin_path config_dir config_file start_delay test_config
 	local cfg_path
