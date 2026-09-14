@@ -10,6 +10,8 @@ local APP_LOG    = "/var/log/danbox-app.log"
 local CORE_LOG   = "/var/log/danbox-core.log"
 local UPDATE_LOG = "/var/log/danbox-update.log"
 local UPDATE_SCRIPT = "/usr/share/danbox/update-core.sh"
+local DASH_LOG = "/var/log/danbox-dashboard.log"
+local DASH_SCRIPT = "/usr/share/danbox/update-dashboard.sh"
 
 function index()
 	if not fs.access("/etc/config/danbox") then
@@ -36,6 +38,8 @@ function index()
 	entry({"admin", "services", "danbox", "core_installed"}, call("action_core_installed")).leaf = true
 	entry({"admin", "services", "danbox", "core_latest"},     call("action_core_latest")).leaf = true
 	entry({"admin", "services", "danbox", "core_update"},     call("action_core_update")).leaf = true
+	entry({"admin", "services", "danbox", "dashboard_installed"}, call("action_dashboard_installed")).leaf = true
+	entry({"admin", "services", "danbox", "dashboard_update"},    call("action_dashboard_update")).leaf = true
 end
 
 -- ---------------------------------------------------------------------
@@ -55,6 +59,7 @@ local function get_cfg()
 		self_mark      = uci:get("danbox", "config", "self_mark") or "0xff",
 		rtable         = uci:get("danbox", "config", "rtable") or "100",
 		dashboard_port = uci:get("danbox", "config", "dashboard_port") or "9090",
+		dashboard_dir  = uci:get("danbox", "config", "dashboard_dir") or "/etc/sing-box/ui",
 	}
 end
 
@@ -133,6 +138,7 @@ function action_config_save()
 	local self_mark      = http.formvalue("self_mark") or "0xff"
 	local rtable         = http.formvalue("rtable") or "100"
 	local dashboard_port = http.formvalue("dashboard_port") or "9090"
+	local dashboard_dir  = http.formvalue("dashboard_dir") or "/etc/sing-box/ui"
 
 	uci:set("danbox", "config", "danbox")
 	uci:set("danbox", "config", "enabled", enabled)
@@ -146,6 +152,7 @@ function action_config_save()
 	uci:set("danbox", "config", "self_mark", self_mark)
 	uci:set("danbox", "config", "rtable", rtable)
 	uci:set("danbox", "config", "dashboard_port", dashboard_port)
+	uci:set("danbox", "config", "dashboard_dir", dashboard_dir)
 	uci:commit("danbox")
 
 	http.prepare_content("application/json")
@@ -253,7 +260,8 @@ function action_log_data()
 	local t = http.formvalue("type") or "app"
 	local path = APP_LOG
 	if t == "core" then path = CORE_LOG
-	elseif t == "update" then path = UPDATE_LOG end
+	elseif t == "update" then path = UPDATE_LOG
+	elseif t == "dashboard" then path = DASH_LOG end
 	local out = sys.exec("tail -n 400 " .. util.shellquote(path) .. " 2>/dev/null") or ""
 	http.prepare_content("application/json")
 	http.write_json({ log = out, type = t })
@@ -308,6 +316,37 @@ function action_core_update()
 	-- ditangkap ke UPDATE_LOG (bukan dibuang ke /dev/null), supaya kalau
 	-- script gagal start sama sekali, alasannya kelihatan jelas di log
 	sys.call(UPDATE_SCRIPT .. " >>" .. util.shellquote(UPDATE_LOG) .. " 2>&1 &")
+
+	http.write_json({ ok = true })
+end
+
+-- ---------------------------------------------------------------------
+-- dashboard update/download (yacd-meta, external_ui buat clash_api)
+-- ---------------------------------------------------------------------
+
+function action_dashboard_installed()
+	local cfg = get_cfg()
+	local exists = fs.access(cfg.dashboard_dir .. "/index.html") and true or false
+	http.prepare_content("application/json")
+	http.write_json({ installed = exists, dir = cfg.dashboard_dir })
+end
+
+function action_dashboard_update()
+	http.prepare_content("application/json")
+
+	if not fs.access(DASH_SCRIPT) then
+		http.write_json({ ok = false, msg = "Script dashboard tidak ditemukan di " .. DASH_SCRIPT .. ". Cek apakah package terinstal dengan benar." })
+		return
+	end
+
+	-- jaga-jaga: paksa executable tiap kali dipanggil (persis kasus update-core.sh)
+	sys.call("chmod +x " .. util.shellquote(DASH_SCRIPT))
+
+	fs.writefile(DASH_LOG, os.date("%Y-%m-%d %H:%M:%S") .. " Memicu proses update dashboard dari LuCI...\n")
+
+	-- error shell asli (Permission denied dst) ikut tertangkap ke DASH_LOG,
+	-- bukan dibuang ke /dev/null
+	sys.call(DASH_SCRIPT .. " >>" .. util.shellquote(DASH_LOG) .. " 2>&1 &")
 
 	http.write_json({ ok = true })
 end

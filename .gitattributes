@@ -1,0 +1,11 @@
+# Paksa LF (Unix line ending) untuk semua file teks -- WAJIB untuk shell
+# script & Lua di OpenWrt, karena CRLF bisa merusak heredoc/shebang.
+* text=auto eol=lf
+
+*.sh    text eol=lf
+*.lua   text eol=lf
+*.htm   text eol=lf
+*.json  text eol=lf
+*.md    text eol=lf
+*.yml   text eol=lf
+Makefile text eol=lf
