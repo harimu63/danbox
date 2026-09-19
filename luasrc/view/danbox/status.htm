@@ -40,13 +40,8 @@
 		<tr class="tr"><td class="td left"><label>Config Directory</label></td>
 			<td class="td left"><input type="text" id="db_config_dir" class="cbi-input-text" style="width:100%"></td></tr>
 
-		<tr class="tr"><td class="td left"><label>Config File (sing-box)</label></td>
-			<td class="td left">
-				<select id="db_config_file" class="cbi-input-select" style="width:100%"></select>
-				<div class="cbi-map-descr">Menampilkan file .json yang lolos validasi sing-box di Config Directory. Pilih file lalu klik Save &amp; Apply.</div>
-				<button type="button" class="cbi-button" style="margin-top:6px" onclick="dbLoadConfigFiles()">Refresh Config List</button>
-				<span id="db_config_file_info" style="margin-left:8px"></span>
-			</td></tr>
+		<tr class="tr"><td class="td left"><label>Config File</label></td>
+			<td class="td left"><input type="text" id="db_config_file" class="cbi-input-text" style="width:100%"></td></tr>
 
 		<tr class="tr"><td class="td left"><label>Start Delay (s)</label></td>
 			<td class="td left"><input type="number" id="db_start_delay" class="cbi-input-text" style="width:100px"></td></tr>
@@ -101,7 +96,6 @@
 		status:  '<%=luci.dispatcher.build_url("admin/services/danbox/status_json")%>',
 		ctl:     '<%=luci.dispatcher.build_url("admin/services/danbox/ctl")%>',
 		cfgGet:  '<%=luci.dispatcher.build_url("admin/services/danbox/config_get")%>',
-		cfgFiles:'<%=luci.dispatcher.build_url("admin/services/danbox/config_files")%>', 
 		cfgSave: '<%=luci.dispatcher.build_url("admin/services/danbox/config_save")%>',
 		logData: '<%=luci.dispatcher.build_url("admin/services/danbox/log_data")%>',
 		dashInstalled: '<%=luci.dispatcher.build_url("admin/services/danbox/dashboard_installed")%>',
@@ -288,7 +282,7 @@
 			document.getElementById('db_enabled').checked = (d.enabled === '1');
 			document.getElementById('db_bin_path').value = d.bin_path;
 			document.getElementById('db_config_dir').value = d.config_dir;
-			dbPopulateConfigFiles(d.config_file);
+			document.getElementById('db_config_file').value = d.config_file;
 			document.getElementById('db_start_delay').value = d.start_delay;
 			document.getElementById('db_test_config').checked = (d.test_config === '1');
 			document.getElementById('db_tproxy_port').value = d.tproxy_port;
