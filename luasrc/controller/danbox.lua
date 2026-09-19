@@ -28,6 +28,7 @@ function index()
 	entry({"admin", "services", "danbox", "ctl"},          call("action_ctl")).leaf = true
 	entry({"admin", "services", "danbox", "status_json"},  call("action_status_json")).leaf = true
 	entry({"admin", "services", "danbox", "config_get"},   call("action_config_get")).leaf = true
+	entry({"admin", "services", "danbox", "config_files"}, call("action_config_files")).leaf = true
 	entry({"admin", "services", "danbox", "config_save"},  call("action_config_save")).leaf = true
 	entry({"admin", "services", "danbox", "file_list"},    call("action_file_list")).leaf = true
 	entry({"admin", "services", "danbox", "file_get"},     call("action_file_get")).leaf = true
@@ -124,6 +125,32 @@ end
 function action_config_get()
 	http.prepare_content("application/json")
 	http.write_json(get_cfg())
+end
+
+function action_config_files()
+	local cfg = get_cfg()
+	local files = {}
+	local dir = fs.dir(cfg.config_dir)
+	if dir then
+		for name in dir do
+			if name:match("%.json$") then
+				local path = cfg.config_dir .. "/" .. name
+				if fs.stat(path) and fs.stat(path).type == "file" then
+					local valid = false
+					if fs.access(cfg.bin_path) then
+						local cmd = util.shellquote(cfg.bin_path) .. " check -c " ..
+							util.shellquote(path) .. " -D " .. util.shellquote(cfg.config_dir) ..
+							" >/dev/null 2>&1"
+						valid = (sys.call(cmd) == 0)
+					end
+					if valid then table.insert(files, name) end
+				end
+			end
+		end
+	end
+	table.sort(files)
+	http.prepare_content("application/json")
+	http.write_json({ ok = true, files = files, current = cfg.config_file })
 end
 
 function action_config_save()
