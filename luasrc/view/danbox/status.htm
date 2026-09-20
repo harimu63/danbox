@@ -41,7 +41,12 @@
 			<td class="td left"><input type="text" id="db_config_dir" class="cbi-input-text" style="width:100%"></td></tr>
 
 		<tr class="tr"><td class="td left"><label>Config File</label></td>
-			<td class="td left"><input type="text" id="db_config_file" class="cbi-input-text" style="width:100%"></td></tr>
+			<td class="td left">
+				<select id="db_config_file" class="cbi-input-select" style="width:calc(100% - 90px)">
+					<option value="">Loading...</option>
+				</select>
+				<button class="cbi-button" onclick="dbLoadConfigFiles()" style="margin-left:8px">🔄 Refresh</button>
+			</td></tr>
 
 		<tr class="tr"><td class="td left"><label>Start Delay (s)</label></td>
 			<td class="td left"><input type="number" id="db_start_delay" class="cbi-input-text" style="width:100px"></td></tr>
@@ -99,7 +104,8 @@
 		cfgSave: '<%=luci.dispatcher.build_url("admin/services/danbox/config_save")%>',
 		logData: '<%=luci.dispatcher.build_url("admin/services/danbox/log_data")%>',
 		dashInstalled: '<%=luci.dispatcher.build_url("admin/services/danbox/dashboard_installed")%>',
-		dashUpdate:    '<%=luci.dispatcher.build_url("admin/services/danbox/dashboard_update")%>'
+		dashUpdate:    '<%=luci.dispatcher.build_url("admin/services/danbox/dashboard_update")%>',
+		configFiles:   '<%=luci.dispatcher.build_url("admin/services/danbox/config_files")%>'
 	};
 
 	var dbDashboardPort = '9090';
@@ -275,6 +281,39 @@
 		});
 	}
 
+	function dbLoadConfigFiles() {
+		fetch(dbUrl.configFiles, {cache:'no-store'})
+		.then(function(r) { return r.json(); })
+		.then(function(d) {
+			var select = document.getElementById('db_config_file');
+			var currentValue = select.value;
+			
+			select.innerHTML = '';
+			
+			if (!d.ok || !d.files || d.files.length === 0) {
+				var opt = document.createElement('option');
+				opt.value = '';
+				opt.textContent = '(tidak ada file .json)';
+				select.appendChild(opt);
+				return;
+			}
+			
+			d.files.forEach(function(file) {
+				var opt = document.createElement('option');
+				opt.value = file;
+				opt.textContent = file;
+				if (file === d.current || file === currentValue) {
+					opt.selected = true;
+				}
+				select.appendChild(opt);
+			});
+		})
+		.catch(function() {
+			var select = document.getElementById('db_config_file');
+			select.innerHTML = '<option value="">(gagal memuat daftar)</option>';
+		});
+	}
+
 	function dbLoadConfig() {
 		fetch(dbUrl.cfgGet, {cache:'no-store'})
 		.then(function(r) { return r.json(); })
@@ -283,6 +322,7 @@
 			document.getElementById('db_bin_path').value = d.bin_path;
 			document.getElementById('db_config_dir').value = d.config_dir;
 			document.getElementById('db_config_file').value = d.config_file;
+			dbLoadConfigFiles();
 			document.getElementById('db_start_delay').value = d.start_delay;
 			document.getElementById('db_test_config').checked = (d.test_config === '1');
 			document.getElementById('db_tproxy_port').value = d.tproxy_port;

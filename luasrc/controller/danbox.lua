@@ -40,6 +40,7 @@ function index()
 	entry({"admin", "services", "danbox", "core_update"},     call("action_core_update")).leaf = true
 	entry({"admin", "services", "danbox", "dashboard_installed"}, call("action_dashboard_installed")).leaf = true
 	entry({"admin", "services", "danbox", "dashboard_update"},    call("action_dashboard_update")).leaf = true
+	entry({"admin", "services", "danbox", "config_files"},        call("action_config_files")).leaf = true
 end
 
 -- ---------------------------------------------------------------------
@@ -157,6 +158,44 @@ function action_config_save()
 
 	http.prepare_content("application/json")
 	http.write_json({ ok = true })
+end
+
+-- ---------------------------------------------------------------------
+-- get list of JSON config files from config directory
+-- ---------------------------------------------------------------------
+
+function action_config_files()
+	local cfg = get_cfg()
+	local config_dir = cfg.config_dir
+	
+	http.prepare_content("application/json")
+	
+	if not fs.access(config_dir) then
+		http.write_json({ ok = false, msg = "Config directory not found", files = {} })
+		return
+	end
+	
+	local files = {}
+	local dir = fs.dir(config_dir)
+	
+	if dir then
+		for file in dir do
+			-- Filter only .json files
+			if file:match("%.json$") then
+				local file_path = config_dir .. "/" .. file
+				local st = fs.stat(file_path)
+				-- Only include regular files, not directories
+				if st and st.type == "reg" then
+					table.insert(files, file)
+				end
+			end
+		end
+	end
+	
+	-- Sort alphabetically
+	table.sort(files)
+	
+	http.write_json({ ok = true, files = files, current = cfg.config_file })
 end
 
 -- ---------------------------------------------------------------------
