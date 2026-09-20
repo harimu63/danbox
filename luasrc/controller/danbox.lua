@@ -24,6 +24,7 @@ function index()
 	entry({"admin", "services", "danbox", "editor"}, template("danbox/editor"), _("Editor"), 2)
 	entry({"admin", "services", "danbox", "log"},    template("danbox/log"),    _("Log"),    3)
 	entry({"admin", "services", "danbox", "update"}, template("danbox/update"), _("Update Core"), 4)
+	entry({"admin", "services", "danbox", "settings"}, template("danbox/settings"), _("Settings"), 5)
 
 	entry({"admin", "services", "danbox", "ctl"},          call("action_ctl")).leaf = true
 	entry({"admin", "services", "danbox", "status_json"},  call("action_status_json")).leaf = true
@@ -41,6 +42,7 @@ function index()
 	entry({"admin", "services", "danbox", "dashboard_installed"}, call("action_dashboard_installed")).leaf = true
 	entry({"admin", "services", "danbox", "dashboard_update"},    call("action_dashboard_update")).leaf = true
 	entry({"admin", "services", "danbox", "config_files"},        call("action_config_files")).leaf = true
+	entry({"admin", "services", "danbox", "config_save_only"},    call("action_config_save_only")).leaf = true
 end
 
 -- ---------------------------------------------------------------------
@@ -148,6 +150,30 @@ function action_config_save()
 	uci:set("danbox", "config", "config_file", config_file)
 	uci:set("danbox", "config", "start_delay", start_delay)
 	uci:set("danbox", "config", "test_config", test_config)
+	uci:set("danbox", "config", "tproxy_port", tproxy_port)
+	uci:set("danbox", "config", "fwmark", fwmark)
+	uci:set("danbox", "config", "self_mark", self_mark)
+	uci:set("danbox", "config", "rtable", rtable)
+	uci:set("danbox", "config", "dashboard_port", dashboard_port)
+	uci:set("danbox", "config", "dashboard_dir", dashboard_dir)
+	uci:commit("danbox")
+
+	http.prepare_content("application/json")
+	http.write_json({ ok = true })
+end
+
+-- ---------------------------------------------------------------------
+-- save config only (without restarting service) - for Settings tab
+-- ---------------------------------------------------------------------
+
+function action_config_save_only()
+	local tproxy_port    = http.formvalue("tproxy_port") or "9898"
+	local fwmark         = http.formvalue("fwmark") or "0x1"
+	local self_mark      = http.formvalue("self_mark") or "0xff"
+	local rtable         = http.formvalue("rtable") or "100"
+	local dashboard_port = http.formvalue("dashboard_port") or "9090"
+	local dashboard_dir  = http.formvalue("dashboard_dir") or "/etc/sing-box/ui"
+
 	uci:set("danbox", "config", "tproxy_port", tproxy_port)
 	uci:set("danbox", "config", "fwmark", fwmark)
 	uci:set("danbox", "config", "self_mark", self_mark)
