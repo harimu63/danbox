@@ -4,20 +4,67 @@
 
 CONF="danbox"
 DASH_LOG="/var/log/danbox-dashboard.log"
-DASH_ZIP_URL="https://github.com/taamarin/yacd-meta/archive/gh-pages.zip"
+
+# Dashboard sources mapping
+declare -A DASH_SOURCES=(
+	["metacubex"]="https://github.com/MetaCubeX/Yacd-meta/archive/gh-pages.zip|yacd.metacubex.one"
+	["haishan"]="https://github.com/haishanh/yacd/archive/gh-pages.zip|yacd.haishan.me"
+	["razord"]="https://github.com/Dreamacro/clash-dashboard/archive/gh-pages.zip|clash.razord.top"
+	["taamarin"]="https://github.com/taamarin/yacd-meta/archive/gh-pages.zip|yacd-meta-taamarin.vercel.app"
+	["metacubexd"]="https://github.com/MetaCubeX/metacubexd/archive/gh-pages.zip|MetaCubeXD"
+	["zashboard"]="https://github.com/Zephyruso/zashboard/archive/gh-pages.zip|Zashboard"
+)
 
 log() {
 	echo "$(date '+%Y-%m-%d %H:%M:%S') $1" >> "$DASH_LOG"
 }
 
 : > "$DASH_LOG"
-log "=== [1/4] Menyiapkan target folder ==="
+log "=== [1/5] Menyiapkan target folder ==="
 
 . /lib/functions.sh 2>/dev/null
 config_load "$CONF"
 DASH_DIR="/etc/sing-box/ui"
+DASH_SOURCE="metacubex"
 config_get DASH_DIR config dashboard_dir "/etc/sing-box/ui"
+config_get DASH_SOURCE config dashboard_source "metacubex"
 log "Target folder dashboard: $DASH_DIR"
+log "Dashboard source: $DASH_SOURCE"
+
+# Get dashboard URL based on source
+case "$DASH_SOURCE" in
+	metacubex)
+		DASH_ZIP_URL="https://github.com/MetaCubeX/Yacd-meta/archive/gh-pages.zip"
+		DASH_NAME="Yacd-meta (MetaCubeX)"
+		;;
+	haishan)
+		DASH_ZIP_URL="https://github.com/haishanh/yacd/archive/gh-pages.zip"
+		DASH_NAME="Yacd (Haishan)"
+		;;
+	razord)
+		DASH_ZIP_URL="https://github.com/Dreamacro/clash-dashboard/archive/gh-pages.zip"
+		DASH_NAME="Clash Dashboard (Razord)"
+		;;
+	taamarin)
+		DASH_ZIP_URL="https://github.com/taamarin/yacd-meta/archive/gh-pages.zip"
+		DASH_NAME="Yacd-meta (Taamarin)"
+		;;
+	metacubexd)
+		DASH_ZIP_URL="https://github.com/MetaCubeX/metacubexd/archive/gh-pages.zip"
+		DASH_NAME="MetaCubeXD"
+		;;
+	zashboard)
+		DASH_ZIP_URL="https://github.com/Zephyruso/zashboard/archive/gh-pages.zip"
+		DASH_NAME="Zashboard"
+		;;
+	*)
+		log "GAGAL: Dashboard source '$DASH_SOURCE' tidak dikenal."
+		exit 1
+		;;
+esac
+
+log "Menggunakan: $DASH_NAME"
+log "URL: $DASH_ZIP_URL"
 
 if ! command -v unzip >/dev/null 2>&1; then
 	log "GAGAL: perintah 'unzip' tidak tersedia di router ini."
@@ -25,7 +72,7 @@ if ! command -v unzip >/dev/null 2>&1; then
 	exit 1
 fi
 
-log "=== [2/4] Mengunduh dashboard (yacd-meta, branch gh-pages) ==="
+log "=== [2/5] Mengunduh dashboard ($DASH_NAME) ==="
 TMP_DIR="/tmp/danbox-dashboard-update"
 rm -rf "$TMP_DIR"
 mkdir -p "$TMP_DIR"
@@ -37,7 +84,7 @@ if ! wget -q "$DASH_ZIP_URL" -O "$TMP_DIR/dashboard.zip" 2>>"$DASH_LOG"; then
 fi
 log "Download selesai ($(du -h "$TMP_DIR/dashboard.zip" 2>/dev/null | cut -f1))."
 
-log "=== [3/4] Mengekstrak dashboard ==="
+log "=== [3/5] Mengekstrak dashboard ==="
 mkdir -p "$TMP_DIR/extracted"
 if ! unzip -q "$TMP_DIR/dashboard.zip" -d "$TMP_DIR/extracted" 2>>"$DASH_LOG"; then
 	log "GAGAL: ekstrak zip gagal (file corrupt / format tidak sesuai)."
@@ -54,6 +101,7 @@ if [ -z "$SRC_DIR" ] || [ ! -f "$SRC_DIR/index.html" ]; then
 fi
 log "Arsip valid, index.html ditemukan."
 
+log "=== [4/5] Backup dan instalasi ==="
 BACKUP_DIR=""
 if [ -d "$DASH_DIR" ] && [ -f "$DASH_DIR/index.html" ]; then
 	BACKUP_DIR="${DASH_DIR}.bak"
@@ -70,10 +118,10 @@ find "$DASH_DIR" -type f -exec chmod 644 {} \;
 rm -rf "$TMP_DIR"
 log "Dashboard dipasang di $DASH_DIR."
 
-log "=== [4/4] Verifikasi ==="
+log "=== [5/5] Verifikasi ==="
 if [ -f "$DASH_DIR/index.html" ]; then
 	log "Verifikasi OK: index.html ditemukan di $DASH_DIR."
-	log "BERHASIL: dashboard berhasil diupdate/dipasang."
+	log "BERHASIL: dashboard ($DASH_NAME) berhasil diupdate/dipasang."
 	[ -n "$BACKUP_DIR" ] && rm -rf "$BACKUP_DIR"
 	log "PENTING: pastikan experimental.clash_api.external_ui di config sing-box kamu mengarah ke: $DASH_DIR"
 else

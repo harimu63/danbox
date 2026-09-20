@@ -23,12 +23,27 @@
 <div class="cbi-section">
 	<h3>Dashboard (clash_api)</h3>
 	<table class="table" style="max-width:700px">
-		<tr class="tr"><td class="td left" style="width:280px"><label>Dashboard Port</label></td>
+		<tr class="tr"><td class="td left" style="width:280px"><label>Dashboard Source</label></td>
+			<td class="td left">
+				<select id="db_dashboard_source" class="cbi-input-select" style="width:100%">
+					<option value="metacubex">Yacd-meta (MetaCubeX) - yacd.metacubex.one</option>
+					<option value="haishan">Yacd (Haishan) - yacd.haishan.me</option>
+					<option value="razord">Clash Dashboard (Razord) - clash.razord.top</option>
+					<option value="taamarin">Yacd-meta (Taamarin) - yacd-meta-taamarin.vercel.app</option>
+					<option value="metacubexd">MetaCubeXD</option>
+					<option value="zashboard">Zashboard</option>
+				</select>
+			</td></tr>
+
+		<tr class="tr"><td class="td left"><label>Dashboard Port</label></td>
 			<td class="td left"><input type="text" id="db_dashboard_port" class="cbi-input-text" style="width:150px"></td></tr>
 
 		<tr class="tr"><td class="td left"><label>Dashboard Directory (external_ui)</label></td>
 			<td class="td left"><input type="text" id="db_dashboard_dir" class="cbi-input-text" style="width:100%"></td></tr>
 	</table>
+	<div class="cbi-map-descr" style="margin-top:6px">
+		Pilih dashboard source lalu update di tab <b>App Config</b> dengan tombol <b>UPDATE DASHBOARD</b>.
+	</div>
 </div>
 
 <div class="cbi-page-actions">
@@ -52,6 +67,7 @@
 			document.getElementById('db_rtable').value = d.rtable;
 			document.getElementById('db_dashboard_port').value = d.dashboard_port;
 			document.getElementById('db_dashboard_dir').value = d.dashboard_dir;
+			document.getElementById('db_dashboard_source').value = d.dashboard_source || 'metacubex';
 		});
 	}
 
@@ -67,6 +83,7 @@
 		body.append('rtable', document.getElementById('db_rtable').value);
 		body.append('dashboard_port', document.getElementById('db_dashboard_port').value);
 		body.append('dashboard_dir', document.getElementById('db_dashboard_dir').value);
+		body.append('dashboard_source', document.getElementById('db_dashboard_source').value);
 
 		fetch(dbUrl.cfgSaveOnly, {method:'POST', body:body})
 		.then(function(r) { return r.json(); })

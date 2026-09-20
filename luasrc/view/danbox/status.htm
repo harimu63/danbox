@@ -29,6 +29,29 @@
 </div>
 
 <div class="cbi-section">
+	<h3>Proxy Info</h3>
+	<table class="table">
+		<tr class="tr table-titles">
+			<th class="th">Public IP</th>
+			<th class="th">Location</th>
+			<th class="th">ISP/Organization</th>
+			<th class="th" style="width:150px">Action</th>
+		</tr>
+		<tr class="tr">
+			<td class="td" id="db_proxy_ip">-</td>
+			<td class="td" id="db_proxy_location">-</td>
+			<td class="td" id="db_proxy_org">-</td>
+			<td class="td">
+				<button class="cbi-button" onclick="dbRefreshProxyInfo()">Refresh</button>
+			</td>
+		</tr>
+	</table>
+	<div class="cbi-map-descr" style="margin-top:6px">
+		Info IP publik dan lokasi yang terdeteksi dari koneksi internet router (melalui proxy jika aktif).
+	</div>
+</div>
+
+<div class="cbi-section">
 	<h3>App Config</h3>
 	<table class="table" style="max-width:700px">
 		<tr class="tr"><td class="td left" style="width:180px"><label>Enable</label></td>
@@ -80,7 +103,8 @@
 		logData: '<%=luci.dispatcher.build_url("admin/services/danbox/log_data")%>',
 		dashInstalled: '<%=luci.dispatcher.build_url("admin/services/danbox/dashboard_installed")%>',
 		dashUpdate:    '<%=luci.dispatcher.build_url("admin/services/danbox/dashboard_update")%>',
-		configFiles:   '<%=luci.dispatcher.build_url("admin/services/danbox/config_files")%>'
+		configFiles:   '<%=luci.dispatcher.build_url("admin/services/danbox/config_files")%>',
+		proxyInfo:     '<%=luci.dispatcher.build_url("admin/services/danbox/proxy_info")%>'
 	};
 
 	var dbDashboardPort = '9090';
@@ -104,6 +128,39 @@
 			var el = document.getElementById('db_status');
 			el.textContent = 'Status Error';
 			el.style.color = '#ff7b72';
+		});
+	}
+
+	function dbRefreshProxyInfo() {
+		var ipEl = document.getElementById('db_proxy_ip');
+		var locEl = document.getElementById('db_proxy_location');
+		var orgEl = document.getElementById('db_proxy_org');
+
+		ipEl.textContent = 'Loading...';
+		locEl.textContent = 'Loading...';
+		orgEl.textContent = 'Loading...';
+
+		fetch(dbUrl.proxyInfo, {cache:'no-store'})
+		.then(function(r) { return r.json(); })
+		.then(function(d) {
+			if (!d.ok) {
+				ipEl.textContent = 'Error';
+				locEl.textContent = d.msg || 'Unknown error';
+				orgEl.textContent = '-';
+				return;
+			}
+
+			ipEl.textContent = d.ip;
+			ipEl.style.fontWeight = 'bold';
+			ipEl.style.color = '#58a6ff';
+
+			locEl.textContent = d.city + ', ' + d.region + ', ' + d.country;
+			orgEl.textContent = d.org;
+		})
+		.catch(function() {
+			ipEl.textContent = 'Error';
+			locEl.textContent = 'Failed to fetch';
+			orgEl.textContent = '-';
 		});
 	}
 
@@ -207,7 +264,7 @@
 	var dbDashPollTimer = null;
 
 	function dbUpdateDashboard() {
-		if (!confirm('Download/update dashboard (yacd-meta) sekarang?')) return;
+		if (!confirm('Download/update dashboard sekarang?')) return;
 		var info = document.getElementById('db_dashboard_info');
 		info.style.color = '#58a6ff';
 		info.textContent = 'Mengunduh & memasang dashboard...';
@@ -405,6 +462,7 @@
 	dbRefreshStatus();
 	dbLoadConfig();
 	dbLoadHomeLog();
+	dbRefreshProxyInfo();
 	dbStartStatusRefresh();
 
 	window.addEventListener('beforeunload', function() {
