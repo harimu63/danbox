@@ -21,10 +21,10 @@ function index()
 	entry({"admin", "services", "danbox"}, firstchild(), _("DanBox"), 60).dependent = false
 
 	entry({"admin", "services", "danbox", "status"}, template("danbox/status"), _("App Config"), 1)
-	entry({"admin", "services", "danbox", "editor"}, template("danbox/editor"), _("Editor"), 2)
-	entry({"admin", "services", "danbox", "log"},    template("danbox/log"),    _("Log"),    3)
+	entry({"admin", "services", "danbox", "settings"}, template("danbox/settings"), _("Settings"), 2)
+	entry({"admin", "services", "danbox", "editor"}, template("danbox/editor"), _("Editor"), 3)
 	entry({"admin", "services", "danbox", "update"}, template("danbox/update"), _("Update Core"), 4)
-	entry({"admin", "services", "danbox", "settings"}, template("danbox/settings"), _("Settings"), 5)
+	entry({"admin", "services", "danbox", "log"},    template("danbox/log"),    _("Log"),    5)
 
 	entry({"admin", "services", "danbox", "ctl"},          call("action_ctl")).leaf = true
 	entry({"admin", "services", "danbox", "status_json"},  call("action_status_json")).leaf = true
@@ -43,6 +43,7 @@ function index()
 	entry({"admin", "services", "danbox", "dashboard_update"},    call("action_dashboard_update")).leaf = true
 	entry({"admin", "services", "danbox", "config_files"},        call("action_config_files")).leaf = true
 	entry({"admin", "services", "danbox", "config_save_only"},    call("action_config_save_only")).leaf = true
+	entry({"admin", "services", "danbox", "proxy_info"},          call("action_proxy_info")).leaf = true
 end
 
 -- ---------------------------------------------------------------------
@@ -63,6 +64,7 @@ local function get_cfg()
 		rtable         = uci:get("danbox", "config", "rtable") or "100",
 		dashboard_port = uci:get("danbox", "config", "dashboard_port") or "9090",
 		dashboard_dir  = uci:get("danbox", "config", "dashboard_dir") or "/etc/sing-box/ui",
+		dashboard_source = uci:get("danbox", "config", "dashboard_source") or "metacubex",
 	}
 end
 
@@ -173,6 +175,7 @@ function action_config_save_only()
 	local rtable         = http.formvalue("rtable") or "100"
 	local dashboard_port = http.formvalue("dashboard_port") or "9090"
 	local dashboard_dir  = http.formvalue("dashboard_dir") or "/etc/sing-box/ui"
+	local dashboard_source = http.formvalue("dashboard_source") or "metacubex"
 
 	uci:set("danbox", "config", "tproxy_port", tproxy_port)
 	uci:set("danbox", "config", "fwmark", fwmark)
@@ -180,6 +183,7 @@ function action_config_save_only()
 	uci:set("danbox", "config", "rtable", rtable)
 	uci:set("danbox", "config", "dashboard_port", dashboard_port)
 	uci:set("danbox", "config", "dashboard_dir", dashboard_dir)
+	uci:set("danbox", "config", "dashboard_source", dashboard_source)
 	uci:commit("danbox")
 
 	http.prepare_content("application/json")
@@ -414,4 +418,41 @@ function action_dashboard_update()
 	sys.call(DASH_SCRIPT .. " >>" .. util.shellquote(DASH_LOG) .. " 2>&1 &")
 
 	http.write_json({ ok = true })
+end
+
+-- ---------------------------------------------------------------------
+-- proxy info (IP & location detection)
+-- ---------------------------------------------------------------------
+
+function action_proxy_info()
+	http.prepare_content("application/json")
+	
+	-- Cek IP public & lokasi melalui ipapi.co (free, no API key)
+	local result = sys.exec("wget -qO- --timeout=5 https://ipapi.co/json/ 2>/dev/null") or ""
+	
+	if result == "" then
+		http.write_json({ 
+			ok = false, 
+			msg = "Gagal mendapatkan info proxy. Cek koneksi internet." 
+		})
+		return
+	end
+	
+	-- Parse JSON response (simple parsing, assumes valid JSON)
+	local ip = result:match('"ip"%s*:%s*"([^"]+)"') or "Unknown"
+	local country = result:match('"country_name"%s*:%s*"([^"]+)"') or "Unknown"
+	local city = result:match('"city"%s*:%s*"([^"]+)"') or "Unknown"
+	local region = result:match('"region"%s*:%s*"([^"]+)"') or "Unknown"
+	local org = result:match('"org"%s*:%s*"([^"]+)"') or "Unknown"
+	local timezone = result:match('"timezone"%s*:%s*"([^"]+)"') or "Unknown"
+	
+	http.write_json({ 
+		ok = true,
+		ip = ip,
+		country = country,
+		city = city,
+		region = region,
+		org = org,
+		timezone = timezone
+	})
 end
