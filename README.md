@@ -1,6 +1,6 @@
-# luci-app-danbox
+# luci-app-danbox v2.0.0
 
-LuCI web interface untuk menjalankan core [sing-box](https://github.com/SagerNet/sing-box) (SagerNet) langsung di OpenWrt — start/stop lewat Enable+Save&Apply, transparent proxy (nftables tproxy) otomatis, editor/file manager khusus folder config, log App/Core terpisah, menu Update Core yang mendeteksi arch+libc sendiri lalu download versi yang benar dari GitHub Releases, **info IP & lokasi proxy real-time**, dan **pilihan 6 dashboard UI berbeda**.
+LuCI web interface untuk menjalankan core [sing-box](https://github.com/SagerNet/sing-box) (SagerNet) langsung di OpenWrt — start/stop lewat Enable+Save&Apply, transparent proxy (nftables tproxy) otomatis, **auto-detect file manager** (TinyFM/FileBrowser/built-in), log App/Core terpisah, menu Update Core yang mendeteksi arch+libc sendiri lalu download versi yang benar dari GitHub Releases, **info IP & lokasi proxy real-time**, dan **pilihan 6 dashboard UI berbeda**.
 
 Repo: **https://github.com/harimu63/danbox**
 Rilis (`.ipk` siap pakai): **https://github.com/harimu63/danbox/releases**
@@ -29,7 +29,13 @@ Rilis (`.ipk` siap pakai): **https://github.com/harimu63/danbox/releases**
 - **Save tanpa restart service** - perubahan tersimpan tanpa mengganggu koneksi yang sedang berjalan.
 
 ### Editor
-File manager (Name/Size/Modified/Perms/Actions) yang di-sandbox hanya ke dalam folder config sing-box — tidak bisa keluar dari folder itu. Bisa navigasi subfolder, buat file baru, Edit, Download, Delete.
+**Smart File Manager** - Auto-detect file manager yang tersedia di router Anda:
+- **TinyFM** (luci-app-tinyfm) - Full-featured dengan terminal integration
+- **FileBrowser** (luci-app-filebrowser) - Modern file browser
+- **LuCI RPC Fileman** (luci-mod-rpc) - Classic file manager
+- **Built-in Editor** - Fallback jika tidak ada file manager terinstall
+
+Otomatis redirect ke folder config sing-box (`/etc/sing-box`) untuk kemudahan akses. Jika tidak ada file manager eksternal, akan menggunakan built-in editor yang di-sandbox ke folder config.
 
 ### Log
 Empat tab terpisah:

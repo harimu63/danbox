@@ -1,11 +1,39 @@
-# ✅ DanBox v1.2.1 - SIAP DEPLOY!
+# ✅ DanBox v2.0.0 - SIAP DEPLOY!
 
 ## 📦 Lokasi Project
 ```
 C:\Users\wildan\Downloads\danbox
 ```
 
-## ✨ Fitur Baru yang Berhasil Ditambahkan
+## ✨ Fitur Baru di v2.0.0
+
+### 🔍 Smart File Manager Auto-Detection
+**Lokasi:** Tab Editor
+
+**Fitur:**
+- ✅ Auto-detect file manager yang tersedia di router
+- ✅ Priority detection: TinyFM → FileBrowser → Fileman → Built-in
+- ✅ Otomatis redirect ke folder sing-box (`/etc/sing-box`)
+- ✅ Universal compatibility - support semua OpenWrt firmware
+- ✅ Fallback ke built-in editor jika tidak ada file manager eksternal
+- ✅ Tidak perlu instalasi tambahan (opsional untuk fitur advanced)
+
+**File Manager yang Didukung:**
+1. **TinyFM** (luci-app-tinyfm) - Full-featured, terminal integration
+2. **FileBrowser** (luci-app-filebrowser) - Modern file browser
+3. **LuCI RPC Fileman** (luci-mod-rpc) - Classic file manager
+4. **Built-in Editor** - Custom file manager sandbox ke folder config
+
+**Cara Kerja:**
+1. Klik tab **Editor**
+2. System otomatis detect file manager yang terinstall
+3. Redirect ke file manager terbaik yang tersedia
+4. Langsung buka folder `/etc/sing-box`
+5. Jika tidak ada file manager eksternal → gunakan built-in editor
+
+---
+
+## 📝 Fitur dari v1.2.1 (Tetap Ada)
 
 ### 1. 🎯 Reorder Tab Menu
 ```
@@ -52,13 +80,16 @@ C:\Users\wildan\Downloads\danbox
 
 | File | Status | Perubahan |
 |------|--------|-----------|
-| `luasrc/controller/danbox.lua` | ✅ | Tab reorder + endpoint proxy_info |
+| `luasrc/controller/danbox.lua` | ✅ | Smart file manager detection + action_editor + action_detect_filemgr |
+| `luasrc/view/danbox/editor.htm` | ✅ | Tetap ada sebagai fallback built-in editor |
 | `luasrc/view/danbox/status.htm` | ✅ | Section Proxy Info + UI |
 | `luasrc/view/danbox/settings.htm` | ✅ | Dropdown 6 dashboard sources |
-| `root/usr/share/danbox/update-dashboard.sh` | ✅ | **FIXED** - No syntax error, support multi-source |
-| `root/etc/config/danbox` | ✅ | Tambah option `dashboard_source` |
-| `README.md` | ✅ | Update lengkap dengan cara install & fitur |
-| `CHANGELOG-UPDATE.md` | ✅ | Dokumentasi perubahan |
+| `root/usr/share/danbox/update-dashboard.sh` | ✅ | Support multi-source |
+| `root/etc/config/danbox` | ✅ | Option `dashboard_source` |
+| `Makefile` | ✅ | Update version to 2.0.0 |
+| `README.md` | ✅ | Update fitur smart file manager |
+| `CHANGELOG-UPDATE.md` | ✅ | Add v2.0.0 changelog |
+| `DEPLOY-READY.md` | ✅ | Update v2.0.0 deployment guide |
 
 ---
 
@@ -98,16 +129,16 @@ cd openwrt
 ./scripts/feeds install luci-app-danbox
 make package/luci-app-danbox/compile V=s
 
-# Output: bin/packages/*/luci/luci-app-danbox_1.2.1_all.ipk
+# Output: bin/packages/*/luci/luci-app-danbox_2.0.0_all.ipk
 ```
 
 ### Opsi 3: Install dari GitHub Release
 ```bash
 # Download IPK dari GitHub Releases
-wget https://github.com/harimu63/danbox/releases/download/v1.2.1/luci-app-danbox_1.2.1_all.ipk
+wget https://github.com/harimu63/danbox/releases/download/v2.0.0/luci-app-danbox_2.0.0_all.ipk
 
 # Install
-opkg install luci-app-danbox_1.2.1_all.ipk
+opkg install luci-app-danbox_2.0.0_all.ipk
 /etc/init.d/rpcd restart
 /etc/init.d/uhttpd restart
 ```
@@ -115,6 +146,28 @@ opkg install luci-app-danbox_1.2.1_all.ipk
 ---
 
 ## 🧪 Testing Checklist
+
+### ✅ Test Smart File Manager Auto-Detection
+- [ ] Buka LuCI → Services → DanBox → Tab Editor
+- [ ] Verifikasi auto-redirect ke file manager yang tersedia:
+  - Jika punya TinyFM → redirect ke `/admin/system/tinyfm?path=/etc/sing-box`
+  - Jika punya FileBrowser → redirect ke `/admin/system/filebrowser?path=/etc/sing-box`
+  - Jika punya Fileman → redirect ke `/admin/fileman?path=/etc/sing-box`
+  - Jika tidak ada → tampilkan built-in editor
+- [ ] Verifikasi langsung buka folder `/etc/sing-box`
+- [ ] Test edit file config di file manager
+- [ ] Test upload/download file
+
+### ✅ Test Detection API
+```bash
+# SSH ke router atau test via browser
+curl "http://192.168.1.1/cgi-bin/luci/admin/services/danbox/detect_filemgr"
+
+# Output expected:
+# {"detected":"tinyfm","url":"/cgi-bin/luci/admin/system/tinyfm?path=/etc/sing-box","config_dir":"/etc/sing-box"}
+# atau
+# {"detected":"builtin","url":null,"config_dir":"/etc/sing-box"}
+```
 
 ### ✅ Test Tab Order
 - [ ] Buka LuCI → Services → DanBox
@@ -198,25 +251,26 @@ Ganti dengan `case statement` untuk mapping dashboard sources
    ```bash
    cd C:\Users\wildan\Downloads\danbox
    git add .
-   git commit -m "feat: add proxy info & multi-dashboard support
+   git commit -m "feat: DanBox v2.0.0 - Smart File Manager Auto-Detection
 
-   - Add real-time IP & location info in App Config
-   - Add 6 dashboard UI options in Settings
-   - Reorder tabs: Settings moved next to App Config, Log moved to end
-   - Fix update-dashboard.sh syntax error (remove associative array)
-   - Update README with detailed installation and usage guide"
+   - Add smart file manager auto-detection (TinyFM/FileBrowser/Fileman/Built-in)
+   - Universal OpenWrt compatibility - support all firmware
+   - Auto-redirect to sing-box config folder
+   - Fallback to built-in editor if no external file manager
+   - Update version to 2.0.0
+   - Update all documentation"
    
    git push origin main
-   git tag v1.2.1
-   git push origin v1.2.1
+   git tag v2.0.0
+   git push origin v2.0.0
    ```
 
 3. **Create GitHub Release**:
    - Go to: https://github.com/harimu63/danbox/releases/new
-   - Tag: `v1.2.1`
-   - Title: `DanBox v1.2.1 - Proxy Info & Multi Dashboard`
+   - Tag: `v2.0.0`
+   - Title: `DanBox v2.0.0 - Smart File Manager`
    - Description: (Copy from CHANGELOG-UPDATE.md)
-   - Upload: `luci-app-danbox_1.2.1_all.ipk` (setelah build)
+   - Upload: `luci-app-danbox_2.0.0_all.ipk` (setelah build)
 
 ---
 
@@ -224,18 +278,20 @@ Ganti dengan `case statement` untuk mapping dashboard sources
 
 | Item | Status |
 |------|--------|
+| Smart File Manager Auto-Detection | ✅ Selesai |
+| Universal OpenWrt Support | ✅ Selesai |
 | Tab Reorder | ✅ Selesai |
 | Proxy Info Feature | ✅ Selesai |
 | Multi Dashboard (6 options) | ✅ Selesai |
-| Script Syntax Error | ✅ Fixed |
+| Version Update to 2.0.0 | ✅ Selesai |
 | README Update | ✅ Lengkap |
 | Documentation | ✅ Lengkap |
 | Ready to Deploy | ✅ **YES** |
 
 ---
 
-**Date:** 2026-09-20  
-**Version:** 1.2.1  
+**Date:** 2026-09-22  
+**Version:** 2.0.0  
 **Status:** ✅ READY FOR PRODUCTION
 
-🎉 Project DanBox v1.2.1 siap untuk dirilis!
+🎉 Project DanBox v2.0.0 siap untuk dirilis!

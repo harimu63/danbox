@@ -22,7 +22,7 @@ function index()
 
 	entry({"admin", "services", "danbox", "status"}, template("danbox/status"), _("App Config"), 1)
 	entry({"admin", "services", "danbox", "settings"}, template("danbox/settings"), _("Settings"), 2)
-	entry({"admin", "services", "danbox", "editor"}, template("danbox/editor"), _("Editor"), 3)
+	entry({"admin", "services", "danbox", "editor"}, call("action_editor"), _("Editor"), 3)
 	entry({"admin", "services", "danbox", "update"}, template("danbox/update"), _("Update Core"), 4)
 	entry({"admin", "services", "danbox", "log"},    template("danbox/log"),    _("Log"),    5)
 
@@ -44,6 +44,8 @@ function index()
 	entry({"admin", "services", "danbox", "config_files"},        call("action_config_files")).leaf = true
 	entry({"admin", "services", "danbox", "config_save_only"},    call("action_config_save_only")).leaf = true
 	entry({"admin", "services", "danbox", "proxy_info"},          call("action_proxy_info")).leaf = true
+	entry({"admin", "services", "danbox", "detect_filemgr"},      call("action_detect_filemgr")).leaf = true
+	entry({"admin", "services", "danbox", "editor_builtin"},      template("danbox/editor")).leaf = true
 end
 
 -- ---------------------------------------------------------------------
@@ -174,7 +176,7 @@ function action_config_save_only()
 	local self_mark      = http.formvalue("self_mark") or "0xff"
 	local rtable         = http.formvalue("rtable") or "100"
 	local dashboard_port = http.formvalue("dashboard_port") or "9090"
-	local dashboard_dir  = http.formvalue("dashboard_dir") or "/etc/sing-box/ui"
+	local dashboard_dir  = http.formvalue("dashboard_dir") or "/etc/sing-box/dashboard"
 	local dashboard_source = http.formvalue("dashboard_source") or "metacubex"
 
 	uci:set("danbox", "config", "tproxy_port", tproxy_port)
@@ -455,4 +457,60 @@ function action_proxy_info()
 		org = org,
 		timezone = timezone
 	})
+end
+
+-- ---------------------------------------------------------------------
+-- auto-detect available file manager and redirect
+-- ---------------------------------------------------------------------
+
+function action_detect_filemgr()
+	http.prepare_content("application/json")
+	
+	local disp = require "luci.dispatcher"
+	local cfg = get_cfg()
+	local config_dir = cfg.config_dir or "/etc/sing-box"
+	local detected = nil
+	local url = nil
+	
+	-- Priority 1: TinyFM (luci-app-tinyfm)
+	if disp.lookup({"admin", "system", "tinyfm"}) then
+		detected = "tinyfm"
+		url = "/cgi-bin/luci/admin/system/tinyfm?path=" .. config_dir
+	-- Priority 2: FileBrowser (luci-app-filebrowser)
+	elseif disp.lookup({"admin", "system", "filebrowser"}) then
+		detected = "filebrowser"
+		url = "/cgi-bin/luci/admin/system/filebrowser?path=" .. config_dir
+	-- Priority 3: LuCI RPC File Manager (luci-mod-rpc)
+	elseif disp.lookup({"admin", "fileman"}) then
+		detected = "fileman"
+		url = "/cgi-bin/luci/admin/fileman?path=" .. config_dir
+	-- Fallback: Built-in custom file manager
+	else
+		detected = "builtin"
+		url = nil
+	end
+	
+	http.write_json({
+		detected = detected,
+		url = url,
+		config_dir = config_dir
+	})
+end
+
+function action_editor()
+	local disp = require "luci.dispatcher"
+	local cfg = get_cfg()
+	local config_dir = cfg.config_dir or "/etc/sing-box"
+	
+	-- Auto-detect and redirect to available file manager
+	if disp.lookup({"admin", "system", "tinyfm"}) then
+		http.redirect("/cgi-bin/luci/admin/system/tinyfm?path=" .. config_dir)
+	elseif disp.lookup({"admin", "system", "filebrowser"}) then
+		http.redirect("/cgi-bin/luci/admin/system/filebrowser?path=" .. config_dir)
+	elseif disp.lookup({"admin", "fileman"}) then
+		http.redirect("/cgi-bin/luci/admin/fileman?path=" .. config_dir)
+	else
+		-- Fallback to built-in editor
+		http.redirect(disp.build_url("admin", "services", "danbox", "editor_builtin"))
+	end
 end

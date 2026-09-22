@@ -1,6 +1,44 @@
 # DanBox Update - Changelog
 
-## Perubahan yang Dilakukan
+## v2.0.0 (2026-09-22)
+
+### 🎉 New Features
+
+#### 1. **Smart File Manager Auto-Detection**
+Tab **Editor** sekarang otomatis mendeteksi file manager yang tersedia di router dan redirect ke yang paling sesuai:
+
+**Priority Detection:**
+1. **TinyFM** (luci-app-tinyfm) - Full-featured dengan terminal integration
+2. **FileBrowser** (luci-app-filebrowser) - Modern file browser
+3. **LuCI RPC Fileman** (luci-mod-rpc) - Classic file manager
+4. **Built-in Editor** - Fallback jika tidak ada file manager eksternal
+
+**Fitur:**
+- ✅ Auto-detect file manager yang terinstall
+- ✅ Otomatis redirect ke folder config sing-box (`/etc/sing-box`)
+- ✅ Universal support - bekerja di semua OpenWrt firmware
+- ✅ Fallback ke built-in editor jika tidak ada file manager eksternal
+- ✅ Tidak perlu instalasi tambahan (opsional untuk fitur advanced)
+
+**Endpoint baru:**
+- `/admin/services/danbox/detect_filemgr` - GET detected file manager info
+- `/admin/services/danbox/editor_builtin` - Built-in editor fallback
+
+#### 2. **Universal OpenWrt Compatibility**
+- Support semua firmware OpenWrt (tidak terbatas pada TinyFM saja)
+- Deteksi otomatis file manager yang tersedia
+- Seamless experience di berbagai setup router
+
+### 🔄 Changes
+- Tab Editor sekarang menggunakan `call("action_editor")` dengan auto-detection logic
+- Built-in editor tetap tersedia sebagai fallback
+- File `editor.htm` tetap dipertahankan untuk fallback mode
+
+---
+
+## v1.2.1 (2026-09-20)
+
+### Perubahan yang Dilakukan
 
 ### 1. **Reorder Tab Menu**
 - **App Config** - Tab 1 (tetap di posisi pertama)
