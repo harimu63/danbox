@@ -1,11 +1,23 @@
 <%+header%>
 
+<style>
+@media screen and (max-width: 768px) {
+	.db-config-table { max-width: 100% !important; }
+	.db-config-table td.td.left { display: block; width: 100% !important; padding: 8px 12px; }
+	.db-config-table tr.tr { display: block; margin-bottom: 12px; border-bottom: 1px solid #e0e0e0; }
+	.db-config-table td:first-child { font-weight: bold; background: #f5f5f5; }
+	.cbi-page-actions { text-align: center; }
+	.cbi-page-actions button { width: 100%; max-width: 300px; }
+	.cbi-input-text, .cbi-input-select { width: 100% !important; max-width: 100% !important; }
+}
+</style>
+
 <h2 name="content">DanBox - Settings</h2>
 <div class="cbi-map-descr">Pengaturan Transparent Proxy dan Dashboard.</div>
 
 <div class="cbi-section">
 	<h3>Transparent Proxy (nftables tproxy)</h3>
-	<table class="table" style="max-width:700px">
+	<table class="table db-config-table" style="max-width:700px">
 		<tr class="tr"><td class="td left" style="width:280px"><label>TPROXY Port</label></td>
 			<td class="td left"><input type="text" id="db_tproxy_port" class="cbi-input-text" style="width:150px"></td></tr>
 
@@ -22,7 +34,7 @@
 
 <div class="cbi-section">
 	<h3>Dashboard (clash_api)</h3>
-	<table class="table" style="max-width:700px">
+	<table class="table db-config-table" style="max-width:700px">
 		<tr class="tr"><td class="td left" style="width:280px"><label>Dashboard Source</label></td>
 			<td class="td left">
 				<select id="db_dashboard_source" class="cbi-input-select" style="width:100%">

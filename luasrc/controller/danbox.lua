@@ -143,7 +143,7 @@ function action_config_save()
 	local self_mark      = http.formvalue("self_mark") or "0xff"
 	local rtable         = http.formvalue("rtable") or "100"
 	local dashboard_port = http.formvalue("dashboard_port") or "9090"
-	local dashboard_dir  = http.formvalue("dashboard_dir") or "/etc/sing-box/ui"
+	local dashboard_dir  = http.formvalue("dashboard_dir") or "/etc/sing-box/dashboard"
 
 	uci:set("danbox", "config", "danbox")
 	uci:set("danbox", "config", "enabled", enabled)

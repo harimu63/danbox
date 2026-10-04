@@ -1,21 +1,32 @@
 <%+header%>
 
+<style>
+@media screen and (max-width: 768px) {
+	.db-responsive-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+	.db-responsive-table table { min-width: 500px; }
+	.cbi-page-actions button { width: 100%; margin-bottom: 6px; }
+	#db_update_log { height: 250px !important; font-size: 11px !important; }
+}
+</style>
+
 <h2 name="content">DanBox - Update Core</h2>
 <div class="cbi-map-descr">Download atau update binary sing-box langsung dari <a href="https://github.com/SagerNet/sing-box/releases" target="_blank">GitHub Releases resmi SagerNet</a>. Binary otomatis di-<code>chmod 755</code> setelah dipasang.</div>
 
 <div class="cbi-section">
-	<table class="table" style="max-width:750px">
-		<tr class="tr table-titles">
-			<th class="th">Versi Terpasang</th>
-			<th class="th">Versi Terbaru (GitHub)</th>
-			<th class="th">Status</th>
-		</tr>
-		<tr class="tr">
-			<td class="td" id="db_installed_ver">-</td>
-			<td class="td" id="db_latest_ver">-</td>
-			<td class="td" id="db_ver_status">-</td>
-		</tr>
-	</table>
+	<div class="db-responsive-table">
+		<table class="table" style="max-width:750px">
+			<tr class="tr table-titles">
+				<th class="th">Versi Terpasang</th>
+				<th class="th">Versi Terbaru (GitHub)</th>
+				<th class="th">Status</th>
+			</tr>
+			<tr class="tr">
+				<td class="td" id="db_installed_ver">-</td>
+				<td class="td" id="db_latest_ver">-</td>
+				<td class="td" id="db_ver_status">-</td>
+			</tr>
+		</table>
+	</div>
 	<div class="cbi-page-actions">
 		<button class="cbi-button" onclick="dbCheckLatest()">Cek Versi Terbaru</button>
 		<button class="cbi-button cbi-button-apply" id="db_update_btn" onclick="dbRunUpdate()">Download / Update Sekarang</button>

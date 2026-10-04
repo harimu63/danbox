@@ -1,5 +1,15 @@
 <%+header%>
 
+<style>
+@media screen and (max-width: 768px) {
+	.db-log-controls { flex-direction: column; align-items: flex-start !important; }
+	.db-log-controls > div { width: 100%; margin-bottom: 8px; }
+	.db-log-controls button { font-size: 12px; padding: 6px 10px; }
+	.db-log-controls label { display: block; margin-top: 8px; }
+	#db_log_box { height: 400px !important; font-size: 11px !important; }
+}
+</style>
+
 <h2 name="content">DanBox - Log</h2>
 <div class="cbi-map-descr">
 	<b>App Log</b>: tahapan service (start/stop, validasi, nftables). &nbsp;
@@ -9,7 +19,7 @@
 </div>
 
 <div class="cbi-section">
-	<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; flex-wrap:wrap; gap:8px">
+	<div class="db-log-controls" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; flex-wrap:wrap; gap:8px">
 		<div>
 			<button class="cbi-button cbi-button-apply" id="db_tab_app" onclick="dbSwitchTab('app')">App Log</button>
 			<button class="cbi-button" id="db_tab_core" onclick="dbSwitchTab('core')">Core Log</button>

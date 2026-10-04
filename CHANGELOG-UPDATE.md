@@ -1,5 +1,34 @@
 # DanBox Update - Changelog
 
+## Version 1.3 - 2026-10-04
+
+### 🎨 Responsive UI Improvements
+- Tambah CSS responsive untuk semua view files
+- UI sekarang optimal untuk desktop dan mobile
+- Tabel otomatis scrollable di layar kecil
+- Button group responsive dengan wrapping
+- Form input full-width di mobile
+- Font size dan height disesuaikan untuk mobile
+- Log box height optimized untuk viewport mobile
+
+**File yang dimodifikasi:**
+- `luasrc/view/danbox/status.htm` - Responsive tables, button groups, config forms
+- `luasrc/view/danbox/settings.htm` - Responsive config tables dan inputs
+- `luasrc/view/danbox/editor.htm` - Responsive file browser dan editor controls
+- `luasrc/view/danbox/log.htm` - Responsive log viewer controls
+- `luasrc/view/danbox/update.htm` - Responsive update table
+
+**CSS Features:**
+- Media query `@media screen and (max-width: 768px)` untuk semua views
+- `.db-responsive-table` untuk horizontal scroll tables
+- `.db-button-group` untuk flexible button layout
+- `.db-config-table` untuk responsive form tables
+- `.db-log-box` untuk optimized log viewer
+
+---
+
+## Version 1.2.1 - 2026-09-20
+
 ## Perubahan yang Dilakukan
 
 ### 1. **Reorder Tab Menu**

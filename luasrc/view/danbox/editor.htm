@@ -1,10 +1,23 @@
 <%+header%>
 
+<style>
+@media screen and (max-width: 768px) {
+	.db-editor-controls { flex-direction: column; gap: 8px !important; }
+	.db-editor-controls input { width: 100% !important; }
+	.db-editor-controls button { width: 100%; }
+	.db-responsive-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+	.db-responsive-table table { min-width: 600px; }
+	.cbi-section-table th, .cbi-section-table td { font-size: 13px; padding: 6px 8px; }
+	#db_editor { height: 300px !important; font-size: 12px !important; }
+	.cbi-page-actions button { width: 100%; margin-bottom: 6px; }
+}
+</style>
+
 <h2 name="content">DanBox - Editor</h2>
 <div class="cbi-map-descr">File manager untuk folder config sing-box (dibatasi hanya di dalam folder ini).</div>
 
 <div class="cbi-section">
-	<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px">
+	<div class="db-editor-controls" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px">
 		<div id="db_breadcrumb" style="font-family:monospace"></div>
 		<div>
 			<input type="text" id="db_newfile_name" placeholder="nama-file-baru.json" class="cbi-input-text" style="width:220px">
@@ -12,16 +25,18 @@
 		</div>
 	</div>
 
-	<table class="table cbi-section-table">
-		<tr class="tr table-titles">
-			<th class="th">Name</th>
-			<th class="th">Size</th>
-			<th class="th">Modified</th>
-			<th class="th">Perms</th>
-			<th class="th" style="width:230px">Actions</th>
-		</tr>
-		<tbody id="db_file_rows"></tbody>
-	</table>
+	<div class="db-responsive-table">
+		<table class="table cbi-section-table">
+			<tr class="tr table-titles">
+				<th class="th">Name</th>
+				<th class="th">Size</th>
+				<th class="th">Modified</th>
+				<th class="th">Perms</th>
+				<th class="th">Actions</th>
+			</tr>
+			<tbody id="db_file_rows"></tbody>
+		</table>
+	</div>
 </div>
 
 <div class="cbi-section" id="db_editor_section" style="display:none">
