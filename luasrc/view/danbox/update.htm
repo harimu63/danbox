@@ -2,10 +2,44 @@
 
 <style>
 @media screen and (max-width: 768px) {
-	.db-responsive-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-	.db-responsive-table table { min-width: 500px; }
-	.cbi-page-actions button { width: 100%; margin-bottom: 6px; }
-	#db_update_log { height: 250px !important; font-size: 11px !important; }
+	/* Ubah tabel menjadi layout kartu untuk mobile */
+	.db-responsive-table table { width: 100%; }
+	.db-responsive-table .table-titles { display: none; }
+	.db-responsive-table tr.tr { 
+		display: block; 
+		margin-bottom: 16px; 
+		border: 1px solid #e0e0e0; 
+		border-radius: 8px;
+		padding: 12px;
+		background: #fff;
+	}
+	.db-responsive-table td.td { 
+		display: block; 
+		width: 100% !important; 
+		padding: 8px 0 !important;
+		border: none !important;
+		text-align: left !important;
+	}
+	.db-responsive-table td.td:before {
+		content: attr(data-label);
+		font-weight: bold;
+		display: block;
+		margin-bottom: 4px;
+		color: #666;
+		font-size: 12px;
+	}
+	
+	/* Page actions */
+	.cbi-page-actions button { 
+		width: 100%; 
+		margin-bottom: 8px;
+	}
+	
+	/* Update log */
+	#db_update_log { 
+		height: 250px !important; 
+		font-size: 11px !important; 
+	}
 }
 </style>
 
@@ -20,11 +54,11 @@
 				<th class="th">Versi Terbaru (GitHub)</th>
 				<th class="th">Status</th>
 			</tr>
-			<tr class="tr">
-				<td class="td" id="db_installed_ver">-</td>
-				<td class="td" id="db_latest_ver">-</td>
-				<td class="td" id="db_ver_status">-</td>
-			</tr>
+		<tr class="tr">
+			<td class="td" data-label="Versi Terpasang" id="db_installed_ver">-</td>
+			<td class="td" data-label="Versi Terbaru (GitHub)" id="db_latest_ver">-</td>
+			<td class="td" data-label="Status" id="db_ver_status">-</td>
+		</tr>
 		</table>
 	</div>
 	<div class="cbi-page-actions">

@@ -2,11 +2,38 @@
 
 <style>
 @media screen and (max-width: 768px) {
-	.db-log-controls { flex-direction: column; align-items: flex-start !important; }
-	.db-log-controls > div { width: 100%; margin-bottom: 8px; }
-	.db-log-controls button { font-size: 12px; padding: 6px 10px; }
-	.db-log-controls label { display: block; margin-top: 8px; }
-	#db_log_box { height: 400px !important; font-size: 11px !important; }
+	/* Log controls */
+	.db-log-controls { 
+		flex-direction: column; 
+		align-items: flex-start !important; 
+	}
+	.db-log-controls > div { 
+		width: 100%; 
+		margin-bottom: 8px; 
+	}
+	.db-log-controls button { 
+		font-size: 12px; 
+		padding: 8px 12px;
+		margin-bottom: 6px;
+		width: 100%;
+	}
+	.db-log-controls label { 
+		display: block; 
+		margin-top: 8px;
+		margin-left: 0 !important;
+	}
+	
+	/* Log box */
+	#db_log_box { 
+		height: 400px !important; 
+		font-size: 11px !important; 
+	}
+	
+	/* Log meta info */
+	#db_log_meta {
+		width: 100%;
+		text-align: left;
+	}
 }
 </style>
 
